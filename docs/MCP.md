@@ -17,7 +17,7 @@ Orbit exposes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io)
 orbit mcp enable --scope read-only
 
 # Enable TCP for remote agents (e.g. claude.ai cloud)
-orbit mcp enable --scope read-only --tcp 127.0.0.1:3901
+orbit mcp enable --scope read-only --tcp 127.0.0.1:5001
 ```
 
 Each `enable` call issues a new bearer token. Tokens are stored in SQLite and can be revoked from the UI or CLI.

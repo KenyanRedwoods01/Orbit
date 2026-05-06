@@ -3,8 +3,9 @@
 # Orbit will start with built-in defaults if this file is absent.
 
 # Address and port to listen on.
-# For a Nginx-fronted install, use "127.0.0.1:3900" instead.
-listen_addr = "0.0.0.0:3900"
+# Default port is 5000. All ports must be in range 5000-6000.
+# For a Nginx-fronted install, use "127.0.0.1:5000" instead.
+listen_addr = "0.0.0.0:5000"
 
 # Directory for SQLite database and BoltDB metric ring.
 data_dir = "/var/lib/orbit"
@@ -38,8 +39,8 @@ enabled     = false
 socket_path = "/run/orbit/mcp.sock"
 
 # Optional TCP listener for remote agents (e.g. claude.ai cloud).
-# Requires token authentication. Disabled by default.
-# tcp_addr = "127.0.0.1:3901"
+# Port must be in range 5000-6000. Requires token authentication.
+# tcp_addr = "127.0.0.1:5001"
 
 # ── Remote servers ────────────────────────────────────────────────────────────
 # Add as many [server] blocks as you like.

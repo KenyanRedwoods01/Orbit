@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/orbit-sh/orbit/internal/auth"
+	"github.com/KenyanRedwoods01/Orbit/internal/auth"
 )
 
 // generateRandomHex returns n cryptographically random bytes encoded as hex.

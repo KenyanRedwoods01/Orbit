@@ -1,0 +1,79 @@
+version: '3.8'
+
+# =============================================================================
+#  Orbit — Docker Compose (builds from source)
+#  Default panel port: 5000  (range 5000-6000)
+#
+#  Quick start:
+#    cp .env.example .env        # set ORBIT_SECRET_KEY
+#    docker compose up -d        # build + start
+#    docker compose logs -f      # follow logs
+#
+#  Custom port:
+#    ORBIT_PORT=5100 docker compose up -d
+# =============================================================================
+
+services:
+
+  # ── Orbit panel (builds from source) ────────────────────────────────────────
+  orbit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${ORBIT_VERSION:-dev}
+    image: orbit:${ORBIT_VERSION:-local}
+    container_name: orbit
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN      # required for firewall rule management
+      - SYS_PTRACE     # required for per-process /proc stats
+    ports:
+      - "${ORBIT_PORT:-5000}:5000"
+    volumes:
+      - orbit_data:/var/lib/orbit
+      - orbit_config:/etc/orbit
+      # Mount Docker socket read-only for container management module
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - ORBIT_PORT=${ORBIT_PORT:-5000}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--no-check-certificate",
+             "https://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "com.orbit.component=panel"
+      - "com.orbit.repo=https://github.com/KenyanRedwoods01/Orbit"
+
+  # ── Nginx reverse proxy (optional — for custom domain + real TLS) ──────────
+  #
+  # Enable with:  docker compose --profile nginx up -d
+  # Requires:     ORBIT_DOMAIN set in .env and certs at ./deploy/nginx/certs/
+  #
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: orbit-nginx
+    restart: unless-stopped
+    profiles: ["nginx"]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/orbit.conf:/etc/nginx/conf.d/orbit.conf:ro
+      - nginx_certs:/etc/nginx/certs
+    depends_on:
+      orbit:
+        condition: service_healthy
+    labels:
+      - "com.orbit.component=proxy"
+
+volumes:
+  orbit_data:
+    driver: local
+  orbit_config:
+    driver: local
+  nginx_certs:
+    driver: local

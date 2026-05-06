@@ -41,9 +41,9 @@ checksum:
 nfpms:
   - id: packages
     package_name: orbit
-    vendor: Orbit VPS
-    homepage: https://orbit.sh
-    maintainer: Orbit VPS <hello@orbit.sh>
+    vendor: KenyanRedwoods01
+    homepage: https://kenyanredwoods01.github.io/Orbit
+    maintainer: KenyanRedwoods01 <https://github.com/KenyanRedwoods01>
     description: "Single-binary VPS management panel — metrics, deploy, firewall, MCP."
     license: AGPL-3.0
     formats:
@@ -61,16 +61,16 @@ nfpms:
 
 dockers:
   - image_templates:
-      - "ghcr.io/orbit-sh/orbit:{{ .Tag }}"
-      - "ghcr.io/orbit-sh/orbit:latest"
+      - "ghcr.io/kenyanredwoods01/orbit:{{ .Tag }}"
+      - "ghcr.io/kenyanredwoods01/orbit:latest"
     dockerfile: packaging/Dockerfile
     build_flag_templates:
       - "--platform=linux/amd64"
 
 release:
   github:
-    owner: orbit-sh
-    name: orbit
+    owner: KenyanRedwoods01
+    name: Orbit
   draft: false
   prerelease: auto
 

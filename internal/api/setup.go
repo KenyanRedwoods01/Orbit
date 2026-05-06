@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/orbit-sh/orbit/internal/auth"
+	"github.com/KenyanRedwoods01/Orbit/internal/auth"
 )
 
 type setupStatus struct {

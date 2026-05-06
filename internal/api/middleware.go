@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/orbit-sh/orbit/internal/auth"
+	"github.com/KenyanRedwoods01/Orbit/internal/auth"
 )
 
 // requireAuth wraps a handler and validates the session JWT from the cookie.

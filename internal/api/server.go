@@ -5,8 +5,8 @@ import (
         "context"
         "net/http"
 
-        "github.com/orbit-sh/orbit/internal/config"
-        "github.com/orbit-sh/orbit/internal/db"
+        "github.com/KenyanRedwoods01/Orbit/internal/config"
+        "github.com/KenyanRedwoods01/Orbit/internal/db"
 )
 
 // Server is the main HTTP server for Orbit.
