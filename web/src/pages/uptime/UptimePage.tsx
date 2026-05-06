@@ -145,7 +145,7 @@ function MonitorCard({ m, onDelete }: { m: UptimeMonitor; onDelete: () => void }
   const p30 = m.sla_30d ?? 100
   const p90 = m.sla_90d ?? 100
 
-  const pingMut = useMutation({
+  useMutation({
     mutationFn: () => pingUptimeMonitor(m.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['uptime-monitors'] }),
   })

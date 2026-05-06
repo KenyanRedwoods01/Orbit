@@ -667,7 +667,7 @@ export default function LogsPage() {
               ) : gridGroups.map(([unit, entries]) => {
                 const open = openCards.has(unit)
                 const color = sourceColor(unit, sources)
-                const topPriority = entries.reduce((m, l) => l.priority < m ? l.priority : m, 7 as Priority)
+                const topPriority = entries.reduce<number>((m, l) => l.priority < m ? l.priority : m, 7)
                 const pm = PRIORITY_META[topPriority]
                 return (
                   <div key={unit} className={styles.serviceCard}>

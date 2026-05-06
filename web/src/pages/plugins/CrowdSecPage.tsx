@@ -9,7 +9,6 @@ import {
   csInstallCollection, csRemoveCollection,
   csSaveConfig, csSaveAcquis, csAllowlistAdd, csInstall,
   fetchPlugins,
-  type CsDecision, type CsAlert, type CsBouncer, type CsHubItem,
 } from '@/lib/api'
 import styles from './CrowdSecPage.module.css'
 
@@ -117,7 +116,7 @@ export default function CrowdSecPage() {
 
   const mutService = useMutation({
     mutationFn: (action: string) => csService(action),
-    onSuccess: (r) => { showToast(r.ok ? `Service ${r.action}ed` : 'Error: ' + r.output); setTimeout(invalidate, 1500) },
+    onSuccess: (r, action) => { showToast(r.ok ? `Service ${action}ed` : 'Error: ' + r.output); setTimeout(invalidate, 1500) },
   })
   const mutAddDecision = useMutation({
     mutationFn: () => csAddDecision({ ip: banIP, duration: banDur, reason: banReason || 'Manual ban via Orbit VPS' }),
@@ -145,7 +144,7 @@ export default function CrowdSecPage() {
   })
   const mutRemoveCollection = useMutation({
     mutationFn: (name: string) => csRemoveCollection(name),
-    onSuccess: (r) => { showToast(r.ok ? 'Collection removed' : 'Error: ' + r.output); qc.invalidateQueries({ queryKey: ['cs-hub'] }) },
+    onSuccess: (r) => { showToast(r.ok ? 'Collection removed' : 'Error removing collection'); qc.invalidateQueries({ queryKey: ['cs-hub'] }) },
   })
   const mutSaveCfg = useMutation({
     mutationFn: () => csSaveConfig(rawCfg, cfgPath),
@@ -154,10 +153,6 @@ export default function CrowdSecPage() {
   const mutSaveAcquis = useMutation({
     mutationFn: () => csSaveAcquis(rawAcquis),
     onSuccess: (r) => showToast(r.ok ? 'Acquis saved & reloaded' : 'Save failed'),
-  })
-  const mutAllowlist = useMutation({
-    mutationFn: (ip: string) => csAllowlistAdd(ip),
-    onSuccess: () => showToast('IP added to allowlist'),
   })
   const mutInstall = useMutation({
     mutationFn: csInstall,

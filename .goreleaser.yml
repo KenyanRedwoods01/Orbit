@@ -8,16 +8,43 @@ before:
     - bash -c "cd web && npm ci && npm run build"
 
 builds:
-  - id: orbit
+  - id: orbit-amd64
     main: ./cmd/orbit
     binary: orbit
     env:
-      - CGO_ENABLED=1   # needed for mattn/go-sqlite3
+      - CGO_ENABLED=1
+      - CC=gcc
     goos:
       - linux
     goarch:
       - amd64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+
+  - id: orbit-arm64
+    main: ./cmd/orbit
+    binary: orbit
+    env:
+      - CGO_ENABLED=1
+      - CC=aarch64-linux-gnu-gcc
+    goos:
+      - linux
+    goarch:
       - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+
+  - id: orbit-armv7
+    main: ./cmd/orbit
+    binary: orbit
+    env:
+      - CGO_ENABLED=1
+      - CC=arm-linux-gnueabihf-gcc
+    goos:
+      - linux
+    goarch:
       - arm
     goarm:
       - "7"
@@ -27,6 +54,10 @@ builds:
 
 archives:
   - id: orbit
+    builds:
+      - orbit-amd64
+      - orbit-arm64
+      - orbit-armv7
     name_template: "orbit_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
     format: tar.gz
     files:
@@ -40,6 +71,10 @@ checksum:
 
 nfpms:
   - id: packages
+    builds:
+      - orbit-amd64
+      - orbit-arm64
+      - orbit-armv7
     package_name: orbit
     vendor: KenyanRedwoods01
     homepage: https://kenyanredwoods01.github.io/Orbit
@@ -60,12 +95,35 @@ nfpms:
       preremove:   "packaging/preremove.sh"
 
 dockers:
-  - image_templates:
-      - "ghcr.io/kenyanredwoods01/orbit:{{ .Tag }}"
-      - "ghcr.io/kenyanredwoods01/orbit:latest"
+  - id: orbit-docker-amd64
+    use: buildx
+    ids:
+      - orbit-amd64
+    image_templates:
+      - "ghcr.io/kenyanredwoods01/orbit:{{ .Tag }}-amd64"
     dockerfile: packaging/Dockerfile
     build_flag_templates:
       - "--platform=linux/amd64"
+
+  - id: orbit-docker-arm64
+    use: buildx
+    ids:
+      - orbit-arm64
+    image_templates:
+      - "ghcr.io/kenyanredwoods01/orbit:{{ .Tag }}-arm64"
+    dockerfile: packaging/Dockerfile
+    build_flag_templates:
+      - "--platform=linux/arm64"
+
+docker_manifests:
+  - name_template: "ghcr.io/kenyanredwoods01/orbit:{{ .Tag }}"
+    image_templates:
+      - "ghcr.io/kenyanredwoods01/orbit:{{ .Tag }}-amd64"
+      - "ghcr.io/kenyanredwoods01/orbit:{{ .Tag }}-arm64"
+  - name_template: "ghcr.io/kenyanredwoods01/orbit:latest"
+    image_templates:
+      - "ghcr.io/kenyanredwoods01/orbit:{{ .Tag }}-amd64"
+      - "ghcr.io/kenyanredwoods01/orbit:{{ .Tag }}-arm64"
 
 release:
   github:

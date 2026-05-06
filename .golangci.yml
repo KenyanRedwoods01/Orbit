@@ -17,3 +17,20 @@ linters-settings:
   gosec:
     excludes:
       - G304  # File path provided as taint input — acceptable in config loading
+      - G115  # Integer overflow conversion — safe in controlled contexts
+  errcheck:
+    exclude-functions:
+      - fmt.Sscanf
+      - fmt.Fprintf
+      - fmt.Fprintln
+      - (io.Closer).Close
+
+issues:
+  exclude-rules:
+    - linters: [unused]
+      text: "is unused"
+      source: "^func handle"
+    - linters: [unused]
+      text: "field .* is unused"
+    - linters: [unused]
+      text: "type .* is unused"

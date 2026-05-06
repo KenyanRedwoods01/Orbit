@@ -4,44 +4,80 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Contributing — Orbit</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
-      --text:#e6edf3;--text2:#8b949e;--accent:#58a6ff;
-      --radius:12px;--mono:'JetBrains Mono',monospace;--sans:'Inter',system-ui,sans-serif;
+      --bg:#080c12;--bg2:#0f1521;--bg3:#182032;--border:#1f2d42;--border2:#2a3d58;
+      --text:#e8f0fe;--text2:#7a8fa8;--text3:#4a6080;
+      --accent:#3b82f6;--accent-lt:#60a5fa;--accent2:#22c55e;--purple:#a78bfa;--yellow:#fbbf24;
+      --radius:12px;--nav-r:7px;
+      --mono:'JetBrains Mono',monospace;--sans:'Inter',system-ui,sans-serif;
     }
+    html { scroll-behavior:smooth; }
     body { font-family:var(--sans);background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased; }
-    a { color:var(--accent); }
-    nav { position:sticky;top:0;z-index:100;background:rgba(13,17,23,0.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 2rem;height:60px; }
-    .nav-logo { font-family:var(--mono);font-size:1.1rem;color:var(--text); }
-    .nav-logo span { color:var(--accent); }
-    .main { max-width:800px;margin:0 auto;padding:3rem 2rem 6rem; }
-    h1 { font-size:2rem;font-weight:700;margin-bottom:0.5rem; }
+    a { color:var(--accent-lt);text-decoration:none; }
+    a:hover { text-decoration:underline; }
+    .nav-outer { position:sticky;top:12px;z-index:200;padding:0 20px; }
+    nav { background:rgba(8,12,18,0.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--border2);border-radius:var(--nav-r);display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:56px;max-width:1160px;margin:0 auto;box-shadow:0 4px 32px rgba(0,0,0,0.4); }
+    .nav-logo { font-family:var(--mono);font-size:1.05rem;font-weight:500;color:var(--text);display:flex;align-items:center;gap:0.4rem; }
+    .nav-logo .orbit { color:var(--accent-lt); }
+    .nav-logo .slash { color:var(--text3); }
+    .nav-links { display:flex;gap:0.25rem;font-size:0.875rem; }
+    .nav-links a { color:var(--text2);padding:0.35rem 0.75rem;border-radius:5px;transition:color 0.15s,background 0.15s; }
+    .nav-links a:hover { color:var(--text);background:rgba(255,255,255,0.05);text-decoration:none; }
+    .nav-links a.active { color:var(--accent-lt);background:rgba(59,130,246,0.1); }
+    .btn-gh { display:flex;align-items:center;gap:0.4rem;color:var(--text2);font-size:0.85rem;padding:0.35rem 0.7rem;border-radius:5px;border:1px solid var(--border2);transition:color 0.15s,border-color 0.15s; }
+    .btn-gh:hover { color:var(--text);border-color:var(--accent);text-decoration:none; }
+    .main { max-width:800px;margin:0 auto;padding:4rem 2rem 6rem; }
+    .page-title { font-size:2.2rem;font-weight:800;letter-spacing:-0.03em;margin-bottom:0.5rem; }
     .lead { color:var(--text2);margin-bottom:2.5rem;font-size:1.05rem; }
-    h2 { font-size:1.3rem;font-weight:600;margin:2.5rem 0 0.75rem;padding-top:0.5rem;border-top:1px solid var(--border); }
+    h2 { font-size:1.25rem;font-weight:700;margin:2.5rem 0 0.75rem;letter-spacing:-0.015em;display:flex;align-items:center;gap:0.5rem; }
+    h2::before { content:'';width:3px;height:1.1em;background:var(--accent);border-radius:2px;display:inline-block;flex-shrink:0; }
     p { color:var(--text2);margin-bottom:1rem; }
-    code { font-family:var(--mono);font-size:0.85em;background:var(--bg3);padding:0.15em 0.4em;border-radius:4px;color:var(--text); }
+    code { font-family:var(--mono);font-size:0.85em;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.15);padding:0.15em 0.45em;border-radius:4px;color:var(--accent-lt); }
+    ul,ol { padding-left:1.6rem;color:var(--text2);margin-bottom:1.25rem; }
+    li { margin-bottom:0.4rem; }
     .code-block { background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin:1.25rem 0; }
-    .code-block-header { padding:0.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border);font-size:0.78rem;color:var(--text2);font-family:var(--mono); }
-    .code-block pre { padding:1.25rem 1.5rem;font-family:var(--mono);font-size:0.85rem;color:var(--text);overflow-x:auto;line-height:1.6; }
-    ul,ol { padding-left:1.5rem;color:var(--text2);margin-bottom:1rem; }
-    li { margin-bottom:0.35rem; }
+    .code-block-header { display:flex;align-items:center;justify-content:space-between;padding:0.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border);font-size:0.76rem;color:var(--text2);font-family:var(--mono); }
+    .copy-btn { display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.06);border:1px solid var(--border2);color:var(--text2);font-size:0.72rem;font-family:var(--sans);padding:0.2rem 0.6rem;border-radius:5px;cursor:pointer;transition:all 0.15s;white-space:nowrap; }
+    .copy-btn:hover { background:rgba(59,130,246,0.12);color:var(--accent-lt);border-color:rgba(59,130,246,0.3); }
+    .copy-btn.copied { color:var(--accent2);border-color:rgba(34,197,94,0.3);background:rgba(34,197,94,0.08); }
+    .code-block pre { padding:1.25rem 1.5rem;font-family:var(--mono);font-size:0.84rem;color:var(--text);overflow-x:auto;line-height:1.7; }
+    .c-green{color:#4ade80}.c-blue{color:#60a5fa}.c-dim{color:#3d5068}
     .commit-list { list-style:none;padding:0; }
-    .commit-list li { padding:0.4rem 0;border-bottom:1px solid var(--border);font-size:0.9rem; }
+    .commit-list li { padding:0.55rem 0;border-bottom:1px solid var(--border);font-size:0.9rem;display:flex;align-items:flex-start;gap:0.6rem;color:var(--text2); }
     .commit-list li:last-child { border-bottom:none; }
-    .commit-type { font-family:var(--mono);font-size:0.78rem;color:var(--accent);background:rgba(88,166,255,0.1);padding:0.15rem 0.5rem;border-radius:4px;margin-right:0.5rem; }
+    .commit-type { font-family:var(--mono);font-size:0.75rem;color:var(--accent-lt);background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.15);padding:0.15rem 0.5rem;border-radius:4px;flex-shrink:0; }
+    .breadcrumb { display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text3);margin-bottom:2rem;margin-top:2rem; }
+    .breadcrumb a { color:var(--text3); }
+    .breadcrumb a:hover { color:var(--text2); }
+    @media (max-width:768px) { .nav-links { display:none; } }
   </style>
 </head>
 <body>
-<nav>
-  <div class="nav-logo"><span>//</span> orbit &mdash; <a href="../index.html" style="color:var(--text2)">docs</a></div>
-  <a href="https://github.com/KenyanRedwoods01/Orbit" target="_blank" style="color:var(--text2);font-size:0.9rem;"><i class="fab fa-github"></i> GitHub</a>
-</nav>
+<div class="nav-outer">
+  <nav>
+    <div class="nav-logo"><span class="slash">//</span><span class="orbit">orbit</span></div>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="installation.html">Install</a>
+      <a href="configuration.html">Config</a>
+      <a href="api-reference.html">API</a>
+      <a href="mcp.html">MCP</a>
+      <a href="github-actions.html">CI/CD</a>
+      <a href="contributing.html" class="active">Contributing</a>
+    </div>
+    <a class="btn-gh" href="https://github.com/KenyanRedwoods01/Orbit" target="_blank"><i class="fab fa-github"></i> GitHub</a>
+  </nav>
+</div>
 <div class="main">
-  <h1>Contributing to Orbit</h1>
+  <div class="breadcrumb"><a href="index.html">Home</a><span>›</span><span>Contributing</span></div>
+  <h1 class="page-title">Contributing to Orbit</h1>
   <p class="lead">Contributions are welcome! Here's how to get your development environment running and submit a pull request.</p>
 
   <h2>Prerequisites</h2>
@@ -54,27 +90,39 @@
 
   <h2>Local development setup</h2>
   <div class="code-block">
-    <div class="code-block-header">bash</div>
-    <pre>git clone https://github.com/KenyanRedwoods01/Orbit.git
-cd Orbit
+    <div class="code-block-header">
+      <span>bash</span>
+      <button class="copy-btn" onclick="copyBlock(this)">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Copy
+      </button>
+    </div>
+    <pre><span class="c-green">git</span> clone https://github.com/KenyanRedwoods01/Orbit.git
+<span class="c-green">cd</span> Orbit
 
-# Install frontend dependencies and build
-cd web && npm install && npm run build && cd ..
+<span class="c-dim"># Install frontend dependencies and build</span>
+<span class="c-green">cd</span> web && npm install && npm run build && <span class="c-green">cd</span> ..
 
-# Build binary (embeds frontend)
-make build
+<span class="c-dim"># Build binary (embeds frontend)</span>
+<span class="c-green">make</span> build
 
-# Run with the example config (port 5000)
+<span class="c-dim"># Run with the example config (port 5000)</span>
 ./dist/orbit --config orbit.example.toml</pre>
   </div>
 
   <h2>Development workflow</h2>
   <div class="code-block">
-    <div class="code-block-header">bash</div>
-    <pre>make test        # run Go tests with race detection
-make lint        # run golangci-lint
-make web-dev     # Vite dev server (hot reload for frontend)
-make run         # run Go backend with orbit.example.toml</pre>
+    <div class="code-block-header">
+      <span>bash — make targets</span>
+      <button class="copy-btn" onclick="copyBlock(this)">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Copy
+      </button>
+    </div>
+    <pre><span class="c-green">make</span> test        <span class="c-dim"># run Go tests with race detection</span>
+<span class="c-green">make</span> lint        <span class="c-dim"># run golangci-lint</span>
+<span class="c-green">make</span> web-dev     <span class="c-dim"># Vite dev server (hot reload for frontend)</span>
+<span class="c-green">make</span> run         <span class="c-dim"># run Go backend with orbit.example.toml</span></pre>
   </div>
 
   <h2>Submitting a pull request</h2>
@@ -82,7 +130,7 @@ make run         # run Go backend with orbit.example.toml</pre>
     <li>Fork the repository on GitHub</li>
     <li>Create a feature branch: <code>git checkout -b feat/my-feature</code></li>
     <li>Make your changes and add tests where applicable</li>
-    <li>Run <code>make test lint</code> &mdash; all checks must pass</li>
+    <li>Run <code>make test lint</code> — all checks must pass</li>
     <li>Commit with a conventional commit message</li>
     <li>Push and open a pull request against <code>main</code></li>
   </ol>
@@ -99,34 +147,45 @@ make run         # run Go backend with orbit.example.toml</pre>
 
   <h2>Project structure</h2>
   <div class="code-block">
-    <div class="code-block-header">tree</div>
+    <div class="code-block-header"><span>tree</span></div>
     <pre>Orbit/
-├── cmd/orbit/          # main entry point
+├── cmd/orbit/          <span class="c-dim"># main entry point</span>
 ├── internal/
-│   ├── api/            # HTTP handlers (one file per feature)
-│   ├── auth/           # JWT authentication + TOTP
-│   ├── collector/      # system metrics collector (/proc)
-│   ├── config/         # TOML config loader + defaults
-│   ├── db/             # SQLite + BoltDB init and schema
-│   ├── mcp/            # MCP server
-│   └── modules/        # one package per feature module
-├── web/                # React + Vite frontend
+│   ├── api/            <span class="c-dim"># HTTP handlers (one file per feature)</span>
+│   ├── auth/           <span class="c-dim"># JWT authentication + TOTP</span>
+│   ├── collector/      <span class="c-dim"># system metrics collector (/proc)</span>
+│   ├── config/         <span class="c-dim"># TOML config loader + defaults</span>
+│   ├── db/             <span class="c-dim"># SQLite + BoltDB init and schema</span>
+│   ├── mcp/            <span class="c-dim"># MCP server</span>
+│   └── modules/        <span class="c-dim"># one package per feature module</span>
+├── web/                <span class="c-dim"># React + Vite frontend</span>
 │   └── src/
-│       ├── components/ # shared UI components
-│       ├── hooks/      # custom React hooks
-│       ├── lib/        # API client
-│       ├── pages/      # one directory per module
-│       └── types/      # shared TypeScript types
-├── scripts/            # install.sh
-├── packaging/          # GoReleaser Dockerfile, systemd unit
-├── deploy/             # Nginx config
-├── Dockerfile          # multi-stage build from source
-├── docker-compose.yml  # Docker Compose (builds from source)
-├── docs/               # GitHub Pages site
-└── .github/workflows/  # ci.yml, release.yml, pages.yml, security.yml</pre>
+│       ├── components/ <span class="c-dim"># shared UI components</span>
+│       ├── hooks/      <span class="c-dim"># custom React hooks</span>
+│       ├── lib/        <span class="c-dim"># API client</span>
+│       ├── pages/      <span class="c-dim"># one directory per module</span>
+│       └── types/      <span class="c-dim"># shared TypeScript types</span>
+├── scripts/            <span class="c-dim"># install.sh</span>
+├── packaging/          <span class="c-dim"># GoReleaser Dockerfile, systemd unit</span>
+├── deploy/             <span class="c-dim"># Nginx config</span>
+├── Dockerfile          <span class="c-dim"># multi-stage build from source</span>
+├── docker-compose.yml  <span class="c-dim"># Docker Compose (builds from source)</span>
+├── docs/               <span class="c-dim"># GitHub Pages site</span>
+└── .github/workflows/  <span class="c-dim"># ci.yml, release.yml, pages.yml, security.yml</span></pre>
   </div>
 
   <p>See <a href="https://github.com/KenyanRedwoods01/Orbit/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a> in the repository for the full contributor guide.</p>
 </div>
+<script>
+function copyBlock(btn) {
+  const pre = btn.closest('.code-block').querySelector('pre');
+  const text = pre ? pre.textContent : '';
+  navigator.clipboard.writeText(text).then(() => {
+    btn.classList.add('copied');
+    btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><polyline points="2,6 4.5,9 10,3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg> Copied!';
+    setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg> Copy'; }, 2000);
+  });
+}
+</script>
 </body>
 </html>

@@ -83,7 +83,7 @@ export default function ServerDetailPage() {
   const m           = server.metrics
 
   function copyHost() {
-    navigator.clipboard.writeText(`${server.user}@${server.host}`).catch(() => {})
+    navigator.clipboard.writeText(`${server!.user}@${server!.host}`).catch(() => {})
     setCopied(true); setTimeout(() => setCopied(false), 1500)
   }
 

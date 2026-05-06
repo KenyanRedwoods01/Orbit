@@ -236,7 +236,7 @@ download_binary() {
   trap "rm -rf $tmp_dir" EXIT
 
   curl -fsSL "$dl_url" -o "$tmp_dir/orbit.tar.gz"
-  tar -xzf "$tmp_dir/orbit.tar.gz" -C "$tmp_dir"
+  tar -xzf "$tmp_dir/orbit.tar.gz" -C "$tmp_dir" --strip-components=1
   install -o root -g root -m 0755 "$tmp_dir/orbit" "$BIN_DIR/orbit"
   ok "  Binary installed -> $BIN_DIR/orbit  (${ORBIT_VERSION})"
 }
@@ -377,13 +377,14 @@ print_success() {
   echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════════╝${NC}"
   echo ""
   echo -e "${CYAN}  Panel URL:${NC}"
-  echo -e "    ${BOLD}https://${public_ip}:${ORBIT_PORT}${NC}  (self-signed TLS)"
+  echo -e "    ${BOLD}http://${public_ip}:${ORBIT_PORT}${NC}"
+  echo -e "    (Add tls_cert_file / tls_key_file to orbit.toml to enable HTTPS)"
   echo ""
   echo -e "${CYAN}  First run:${NC}"
   echo -e "    A setup wizard will create your admin account on first visit."
   echo ""
   echo -e "${CYAN}  Port assignments  [range ${PORT_MIN}-${PORT_MAX}]:${NC}"
-  printf "    %-24s %s\n" "Panel (HTTPS):"  "${ORBIT_PORT}"
+  printf "    %-24s %s\n" "Panel (HTTP):"   "${ORBIT_PORT}"
   printf "    %-24s %s\n" "MCP TCP:"        "${ORBIT_MCP_PORT}  (disabled -- edit orbit.toml to enable)"
   printf "    %-24s %s\n" "Metrics:"        "${ORBIT_METRICS_PORT}  (disabled -- edit orbit.toml to enable)"
   echo ""
