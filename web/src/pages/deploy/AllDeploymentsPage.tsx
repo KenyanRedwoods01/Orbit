@@ -11,7 +11,6 @@ import styles from './AllDeployments.module.css'
 const IcoSearch   = () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><circle cx="6" cy="6" r="4"/><line x1="9" y1="9" x2="12.5" y2="12.5"/></svg>
 const IcoBack     = () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="9,2 4,7 9,12"/></svg>
 const IcoRerun    = () => <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M10 5.5A3.5 3.5 0 1 1 8.2 2.4"/><polyline points="8.2,1 10,2.4 8.5,4"/></svg>
-const IcoArrow    = () => <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polyline points="5,3 8,6 5,9"/></svg>
 const IcoRefresh  = () => <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a4 4 0 1 1 1 2.6"/><polyline points="3,10 3,7 6,7"/></svg>
 
 type SortKey = 'started_at' | 'hook_name' | 'status' | 'duration'

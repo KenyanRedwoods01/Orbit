@@ -351,7 +351,7 @@ export default function Layout() {
                     <div className={styles.dropName}>{displayName}</div>
                     <span className={styles.dropRole}>{user?.scope ?? 'admin'}</span>
                   </div>
-                  <div className={`${styles.dropStatusDot} ${server.status === 'online' ? styles.dotOnline : styles.dotOffline}`} title={`Server ${server.status}`} />
+                  <div className={`${styles.dropStatusDot} ${server?.status === 'online' ? styles.dotOnline : styles.dotOffline}`} title={`Server ${server?.status ?? ''}`} />
                 </div>
 
                 <div className={styles.dropDivider} />

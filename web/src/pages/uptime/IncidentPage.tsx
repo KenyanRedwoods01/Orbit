@@ -396,7 +396,7 @@ export default function IncidentPage() {
             <span style={{ color: '#ef4444' }}>Red zones = failed checks</span>
           </div>
           <div className={styles.chartArea}>
-            <ImpactChart entries={inc.checkLog} baseline={inc.latencyBaseline} peak={inc.latencyPeak}/>
+            <ImpactChart entries={inc.checkLog.map(c => ({ offset_min: c.offsetMin, latency_ms: c.latencyMs }))} baseline={inc.latencyBaseline} peak={inc.latencyPeak}/>
           </div>
         </div>
       </div>

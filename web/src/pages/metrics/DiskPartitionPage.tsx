@@ -5,7 +5,6 @@ import { fetchFSList, fetchFSRead, writeFSFile, mkdirFS, deleteFS, type FSEntry 
 import { formatBytes, formatBps, pctColor } from '@/lib/utils'
 import Editor from '@monaco-editor/react'
 import { EXT_TO_MONACO } from '../ftp/fileTypes'
-import styles from './MetricsPage.module.css'
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 const IcoBack      = () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="9,2.5 4,7 9,11.5"/></svg>

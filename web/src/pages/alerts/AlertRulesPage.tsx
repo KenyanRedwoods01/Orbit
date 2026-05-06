@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   fetchAlertRules, fetchAlertEvents,
   createAlertRule, updateAlertRule, deleteAlertRule, toggleAlertRule,
-  type AlertRule, type AlertEvent,
+  type AlertRule,
 } from '@/lib/api'
 import styles from './AlertRulesPage.module.css'
 

@@ -4,10 +4,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   fetchF2bStatus, fetchF2bJails, fetchF2bBans, fetchF2bLogs,
   fetchF2bConfig, fetchF2bWhitelist, fetchF2bStats,
-  f2bBanIP, f2bUnbanIP, f2bUnbanGlobal, f2bService,
+  f2bBanIP, f2bUnbanGlobal, f2bService,
   f2bSaveConfig, f2bAddWhitelist, f2bRemoveWhitelist, f2bInstall,
   fetchPlugins,
-  type F2bJail, type F2bBan, type F2bLogEntry, type F2bStat,
+  type F2bJail, type F2bStat,
 } from '@/lib/api'
 import styles from './Fail2BanPage.module.css'
 
@@ -24,7 +24,6 @@ const IcoTrash   = () => <svg viewBox="0 0 20 20" fill="none" stroke="currentCol
 const IcoSave    = () => <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" width="13" height="13"><path d="M17 17H3V3h10l4 4z"/><rect x="7" y="11" width="6" height="6" rx=".5"/><rect x="6" y="3" width="7" height="4" rx=".5"/></svg>
 const IcoCopy    = () => <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" width="12" height="12"><rect x="8" y="8" width="9" height="9" rx="1.5"/><path d="M3 12V4a1 1 0 0 1 1-1h8"/></svg>
 const IcoPackage = () => <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" width="15" height="15"><path d="M10 2l7 4v8l-7 4-7-4V6z"/></svg>
-const IcoList    = () => <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" width="13" height="13"><line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/></svg>
 const IcoGlobe   = () => <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" width="13" height="13"><circle cx="10" cy="10" r="8"/><path d="M2 10h16M10 2a14 14 0 0 1 0 16M10 2a14 14 0 0 0 0 16"/></svg>
 
 type Tab = 'overview' | 'jails' | 'bans' | 'whitelist' | 'config' | 'logs'

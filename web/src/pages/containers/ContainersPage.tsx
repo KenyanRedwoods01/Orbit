@@ -202,7 +202,6 @@ export default function ContainersPage() {
 
   // Docker plugin/daemon warning
   const dockerUnavailable = !isFetching && dockerInfo === undefined
-  const dockerNotRunning  = dockerInfo && !dockerInfo.version
 
   return (
     <div>

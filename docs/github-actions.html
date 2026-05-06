@@ -4,107 +4,226 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GitHub Actions — Orbit</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
-      --text:#e6edf3;--text2:#8b949e;--accent:#58a6ff;
-      --purple:#bc8cff;--radius:12px;
+      --bg:#080c12;--bg2:#0f1521;--bg3:#182032;--bg4:#1e2a40;
+      --border:#1f2d42;--border2:#2a3d58;
+      --text:#e8f0fe;--text2:#7a8fa8;--text3:#4a6080;
+      --accent:#3b82f6;--accent-lt:#60a5fa;--accent2:#22c55e;
+      --purple:#a78bfa;--yellow:#fbbf24;
+      --radius:12px;--nav-r:7px;
       --mono:'JetBrains Mono',monospace;--sans:'Inter',system-ui,sans-serif;
     }
+    html { scroll-behavior: smooth; }
     body { font-family:var(--sans);background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased; }
-    a { color:var(--accent); }
-    nav { position:sticky;top:0;z-index:100;background:rgba(13,17,23,0.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 2rem;height:60px; }
-    .nav-logo { font-family:var(--mono);font-size:1.1rem;color:var(--text); }
-    .nav-logo span { color:var(--accent); }
-    .main { max-width:800px;margin:0 auto;padding:3rem 2rem 6rem; }
-    h1 { font-size:2rem;font-weight:700;margin-bottom:0.5rem; }
+    a { color:var(--accent-lt);text-decoration:none; }
+    a:hover { text-decoration:underline; }
+
+    .nav-outer { position:sticky;top:12px;z-index:200;padding:0 20px; }
+    nav {
+      background:rgba(8,12,18,0.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+      border:1px solid var(--border2);border-radius:var(--nav-r);
+      display:flex;align-items:center;justify-content:space-between;
+      padding:0 1.5rem;height:56px;max-width:1160px;margin:0 auto;
+      box-shadow:0 4px 32px rgba(0,0,0,0.4);
+    }
+    .nav-logo { font-family:var(--mono);font-size:1.05rem;font-weight:500;color:var(--text);display:flex;align-items:center;gap:0.4rem; }
+    .nav-logo .orbit { color:var(--accent-lt); }
+    .nav-logo .slash { color:var(--text3); }
+    .nav-links { display:flex;gap:0.25rem;font-size:0.875rem; }
+    .nav-links a { color:var(--text2);padding:0.35rem 0.75rem;border-radius:5px;transition:color 0.15s,background 0.15s; }
+    .nav-links a:hover { color:var(--text);background:rgba(255,255,255,0.05);text-decoration:none; }
+    .nav-links a.active { color:var(--accent-lt);background:rgba(59,130,246,0.1); }
+    .btn-gh { display:flex;align-items:center;gap:0.4rem;color:var(--text2);font-size:0.85rem;padding:0.35rem 0.7rem;border-radius:5px;border:1px solid var(--border2);transition:color 0.15s,border-color 0.15s; }
+    .btn-gh:hover { color:var(--text);border-color:var(--accent);text-decoration:none; }
+
+    .main { max-width:800px;margin:0 auto;padding:4rem 2rem 6rem; }
+    .page-title { font-size:2.2rem;font-weight:800;letter-spacing:-0.03em;margin-bottom:0.5rem; }
     .lead { color:var(--text2);margin-bottom:2.5rem;font-size:1.05rem; }
-    h2 { font-size:1.3rem;font-weight:600;margin:2.5rem 0 0.75rem;padding-top:0.5rem;border-top:1px solid var(--border); }
+    h2 { font-size:1.25rem;font-weight:700;margin:2.5rem 0 0.75rem;letter-spacing:-0.015em;display:flex;align-items:center;gap:0.5rem; }
+    h2::before { content:'';width:3px;height:1.1em;background:var(--accent);border-radius:2px;display:inline-block;flex-shrink:0; }
     p { color:var(--text2);margin-bottom:1rem; }
-    code { font-family:var(--mono);font-size:0.85em;background:var(--bg3);padding:0.15em 0.4em;border-radius:4px;color:var(--text); }
+    code { font-family:var(--mono);font-size:0.85em;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.15);padding:0.15em 0.45em;border-radius:4px;color:var(--accent-lt); }
+    ul,ol { padding-left:1.6rem;color:var(--text2);margin-bottom:1.25rem; }
+    li { margin-bottom:0.4rem; }
+
     .code-block { background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin:1.25rem 0; }
-    .code-block-header { padding:0.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border);font-size:0.78rem;color:var(--text2);font-family:var(--mono); }
-    .code-block pre { padding:1.25rem 1.5rem;font-family:var(--mono);font-size:0.82rem;color:var(--text);overflow-x:auto;line-height:1.6; }
-    ul { padding-left:1.5rem;color:var(--text2);margin-bottom:1rem; }
-    li { margin-bottom:0.35rem; }
-    .wf-card { background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem; }
-    .wf-card h3 { font-size:1rem;font-weight:600;margin-bottom:0.35rem; }
-    .wf-card .trigger { font-family:var(--mono);font-size:0.78rem;color:var(--purple);margin-bottom:0.5rem; }
-    .wf-card p { font-size:0.88rem;color:var(--text2);margin:0; }
-    .wf-icon { margin-right:0.5rem;color:var(--accent); }
+    .code-block-header { display:flex;align-items:center;justify-content:space-between;padding:0.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border);font-size:0.76rem;color:var(--text2);font-family:var(--mono); }
+    .copy-btn { display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.06);border:1px solid var(--border2);color:var(--text2);font-size:0.72rem;font-family:var(--sans);padding:0.2rem 0.6rem;border-radius:5px;cursor:pointer;transition:all 0.15s;white-space:nowrap; }
+    .copy-btn:hover { background:rgba(59,130,246,0.12);color:var(--accent-lt);border-color:rgba(59,130,246,0.3); }
+    .copy-btn.copied { color:var(--accent2);border-color:rgba(34,197,94,0.3);background:rgba(34,197,94,0.08); }
+    .code-block pre { padding:1.25rem 1.5rem;font-family:var(--mono);font-size:0.84rem;color:var(--text);overflow-x:auto;line-height:1.7; }
+    .c-green { color:#4ade80; } .c-blue { color:#60a5fa; } .c-purple { color:#c4b5fd; } .c-dim { color:#3d5068; } .c-yellow { color:#fbbf24; }
+
+    .wf-grid { display:grid;gap:0.75rem; }
+    .wf-card { background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem 1.5rem;transition:border-color 0.2s;display:flex;gap:1rem;align-items:flex-start; }
+    .wf-card:hover { border-color:var(--border2); }
+    .wf-num { flex-shrink:0;width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;box-shadow:0 2px 10px rgba(59,130,246,0.3); }
+    .wf-card h3 { font-size:0.95rem;font-weight:600;margin-bottom:0.3rem; }
+    .wf-card p { font-size:0.85rem;color:var(--text2);margin:0; }
+    .wf-trigger { font-family:var(--mono);font-size:0.72rem;color:var(--purple);margin-bottom:0.4rem; }
+    .wf-badge { font-family:var(--mono);font-size:0.68rem;color:var(--purple);background:rgba(167,139,250,0.1);padding:0.15rem 0.55rem;border-radius:4px;margin-left:0.5rem;border:1px solid rgba(167,139,250,0.15); }
+
+    .breadcrumb { display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text3);margin-bottom:2rem;margin-top:2rem; }
+    .breadcrumb a { color:var(--text3); }
+    .breadcrumb a:hover { color:var(--text2); }
+    .breadcrumb span { color:var(--text3); }
+
+    @media (max-width:768px) { .nav-links { display:none; } }
   </style>
 </head>
 <body>
-<nav>
-  <div class="nav-logo"><span>//</span> orbit &mdash; <a href="../index.html" style="color:var(--text2)">docs</a></div>
-  <a href="https://github.com/KenyanRedwoods01/Orbit" target="_blank" style="color:var(--text2);font-size:0.9rem;"><i class="fab fa-github"></i> GitHub</a>
-</nav>
+
+<div class="nav-outer">
+  <nav>
+    <div class="nav-logo">
+      <span class="slash">//</span>
+      <span class="orbit">orbit</span>
+    </div>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="installation.html">Install</a>
+      <a href="configuration.html">Config</a>
+      <a href="api-reference.html">API</a>
+      <a href="mcp.html">MCP</a>
+      <a href="github-actions.html" class="active">CI/CD</a>
+      <a href="security.html">Security</a>
+    </div>
+    <a class="btn-gh" href="https://github.com/KenyanRedwoods01/Orbit" target="_blank">
+      <i class="fab fa-github"></i> GitHub
+    </a>
+  </nav>
+</div>
+
 <div class="main">
-  <h1>GitHub Actions</h1>
+  <div class="breadcrumb">
+    <a href="index.html">Home</a>
+    <span>›</span>
+    <span>GitHub Actions</span>
+  </div>
+
+  <h1 class="page-title">GitHub Actions</h1>
   <p class="lead">Orbit ships four production-grade workflows covering CI, releases, documentation, and security scanning.</p>
 
   <h2>Workflows overview</h2>
-
-  <div class="wf-card">
-    <div class="trigger"><i class="fas fa-code-branch wf-icon"></i>on: push (all branches) &middot; pull_request</div>
-    <h3><i class="fas fa-vial wf-icon"></i>ci.yml &mdash; Continuous Integration</h3>
-    <p>Runs golangci-lint, Go tests (race detection + coverage), TypeScript type-check, Vite build, and uploads a smoke-test binary artifact.</p>
-  </div>
-
-  <div class="wf-card">
-    <div class="trigger"><i class="fas fa-tag wf-icon"></i>on: push tag v*.*.*</div>
-    <h3><i class="fas fa-rocket wf-icon"></i>release.yml &mdash; Release Pipeline</h3>
-    <p>Runs GoReleaser to produce Linux binaries (amd64/arm64/armv7), .deb and .rpm packages, and a multi-arch Docker image pushed to <code>ghcr.io/kenyanredwoods01/orbit</code>.</p>
-  </div>
-
-  <div class="wf-card">
-    <div class="trigger"><i class="fas fa-file-code wf-icon"></i>on: push to main (docs/**)</div>
-    <h3><i class="fab fa-github wf-icon"></i>pages.yml &mdash; GitHub Pages</h3>
-    <p>Deploys the <code>docs/</code> directory to GitHub Pages. No build step &mdash; the site is pure HTML/CSS.</p>
-  </div>
-
-  <div class="wf-card">
-    <div class="trigger"><i class="fas fa-shield-alt wf-icon"></i>on: push to main &middot; schedule (weekly)</div>
-    <h3><i class="fas fa-lock wf-icon"></i>security.yml &mdash; Security Scan</h3>
-    <p>Runs <code>govulncheck</code> for Go CVE scanning and CodeQL analysis for Go and JavaScript. Results appear in the GitHub Security tab.</p>
+  <div class="wf-grid">
+    <div class="wf-card">
+      <div class="wf-num">1</div>
+      <div>
+        <div class="wf-trigger"><i class="fas fa-code-branch" style="margin-right:4px"></i>on: push (all branches) &middot; pull_request</div>
+        <h3>ci.yml — Continuous Integration <span class="wf-badge">.github/workflows/ci.yml</span></h3>
+        <p>Runs golangci-lint, Go tests (race detection + coverage), Vite build, and uploads a smoke-test binary artifact.</p>
+      </div>
+    </div>
+    <div class="wf-card">
+      <div class="wf-num">2</div>
+      <div>
+        <div class="wf-trigger"><i class="fas fa-tag" style="margin-right:4px"></i>on: push tag v*.*.*</div>
+        <h3>release.yml — Release Pipeline <span class="wf-badge">.github/workflows/release.yml</span></h3>
+        <p>Runs GoReleaser to produce Linux binaries (amd64/arm64/armv7), .deb and .rpm packages, and a multi-arch Docker image pushed to <code>ghcr.io/kenyanredwoods01/orbit</code>.</p>
+      </div>
+    </div>
+    <div class="wf-card">
+      <div class="wf-num">3</div>
+      <div>
+        <div class="wf-trigger"><i class="fas fa-file-code" style="margin-right:4px"></i>on: push to main (docs/**)</div>
+        <h3>pages.yml — GitHub Pages <span class="wf-badge">.github/workflows/pages.yml</span></h3>
+        <p>Deploys the <code>docs/</code> directory to GitHub Pages. No build step — the site is pure HTML/CSS.</p>
+      </div>
+    </div>
+    <div class="wf-card">
+      <div class="wf-num">4</div>
+      <div>
+        <div class="wf-trigger"><i class="fas fa-shield-halved" style="margin-right:4px"></i>on: push to main &middot; schedule (weekly)</div>
+        <h3>security.yml — Security Scan <span class="wf-badge">.github/workflows/security.yml</span></h3>
+        <p>Runs <code>govulncheck</code> for Go CVE scanning and CodeQL analysis for Go and JavaScript. Results appear in the GitHub Security tab.</p>
+      </div>
+    </div>
   </div>
 
   <h2>Creating a release</h2>
   <div class="code-block">
-    <div class="code-block-header">bash</div>
-    <pre># Bump version, tag, push &mdash; release workflow fires automatically
-git tag v1.2.0
-git push origin v1.2.0
+    <div class="code-block-header">
+      <span>bash</span>
+      <button class="copy-btn" onclick="copyBlock(this)">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Copy
+      </button>
+    </div>
+    <pre><span class="c-dim"># Bump version, tag, push — release workflow fires automatically</span>
+<span class="c-green">git</span> tag v1.2.0
+<span class="c-green">git</span> push origin v1.2.0
 
-# GoReleaser produces:
-#  orbit_linux_amd64.tar.gz
-#  orbit_linux_arm64.tar.gz
-#  orbit_linux_armv7.tar.gz
-#  orbit_1.2.0_amd64.deb
-#  orbit_1.2.0_x86_64.rpm
-#  ghcr.io/kenyanredwoods01/orbit:v1.2.0
-#  ghcr.io/kenyanredwoods01/orbit:latest
-#  checksums.txt</pre>
+<span class="c-dim"># GoReleaser produces:</span>
+<span class="c-dim">#  orbit_linux_amd64.tar.gz</span>
+<span class="c-dim">#  orbit_linux_arm64.tar.gz</span>
+<span class="c-dim">#  orbit_linux_armv7.tar.gz</span>
+<span class="c-dim">#  orbit_1.2.0_amd64.deb</span>
+<span class="c-dim">#  orbit_1.2.0_x86_64.rpm</span>
+<span class="c-dim">#  ghcr.io/kenyanredwoods01/orbit:v1.2.0</span>
+<span class="c-dim">#  ghcr.io/kenyanredwoods01/orbit:latest</span>
+<span class="c-dim">#  checksums.txt</span></pre>
   </div>
 
   <h2>Enabling GitHub Pages</h2>
   <ul>
-    <li>Go to your repo &rarr; <strong>Settings &rarr; Pages</strong></li>
+    <li>Go to your repo → <strong>Settings → Pages</strong></li>
     <li>Source: <strong>GitHub Actions</strong></li>
     <li>The <code>pages.yml</code> workflow deploys on every push to <code>main</code> that touches <code>docs/**</code></li>
     <li>Site will be live at <code>https://kenyanredwoods01.github.io/Orbit</code></li>
   </ul>
 
   <h2>Required permissions</h2>
-  <p>The workflows use only <code>GITHUB_TOKEN</code> &mdash; no additional secrets needed. Make sure your repo has:</p>
+  <p>The workflows use only <code>GITHUB_TOKEN</code> — no additional secrets needed. Make sure your repo has:</p>
   <ul>
-    <li><strong>Actions &rarr; Workflow permissions:</strong> Read and write permissions</li>
+    <li><strong>Actions → Workflow permissions:</strong> Read and write permissions</li>
     <li><strong>Pages:</strong> Source set to GitHub Actions</li>
     <li><strong>Packages:</strong> Enabled (for GHCR pushes on release)</li>
   </ul>
+
+  <h2>CI workflow YAML</h2>
+  <div class="code-block">
+    <div class="code-block-header">
+      <span>.github/workflows/ci.yml — key structure</span>
+      <button class="copy-btn" onclick="copyBlock(this)">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Copy
+      </button>
+    </div>
+    <pre><span class="c-purple">name</span>: <span class="c-green">CI</span>
+<span class="c-purple">on</span>:
+  <span class="c-blue">push</span>:
+    <span class="c-blue">branches</span>: [<span class="c-green">main</span>, <span class="c-green">develop</span>, <span class="c-green">"feature/**"</span>]
+  <span class="c-blue">pull_request</span>:
+    <span class="c-blue">branches</span>: [<span class="c-green">main</span>, <span class="c-green">develop</span>]
+
+<span class="c-purple">jobs</span>:
+  <span class="c-blue">lint</span>:        <span class="c-dim"># golangci-lint (continue-on-error)</span>
+  <span class="c-blue">test-go</span>:    <span class="c-dim"># go test ./... -race -cover</span>
+  <span class="c-blue">test-web</span>:   <span class="c-dim"># npm ci && npm run build</span>
+  <span class="c-blue">build-smoke</span>: <span class="c-dim"># full binary + --version smoke test</span></pre>
+  </div>
 </div>
+
+<script>
+function copyBlock(btn) {
+  const pre = btn.closest('.code-block').querySelector('pre');
+  const text = pre ? pre.textContent : '';
+  navigator.clipboard.writeText(text).then(() => {
+    btn.classList.add('copied');
+    btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><polyline points="2,6 4.5,9 10,3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg> Copied!';
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg> Copy';
+    }, 2000);
+  });
+}
+</script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import {
@@ -9,7 +9,6 @@ import {
   suricataService, suricataReloadRules, suricataUpdateRules,
   suricataInstall, suricataCreateRule, suricataDropIP,
   suricataAddHostbit, suricataSaveConfig, fetchPlugins,
-  type SuricataAlert, type SuricataRule, type SuricataLogEntry,
 } from '@/lib/api'
 import styles from './SuricataPage.module.css'
 import suricataLogoSrc from '@/assets/suricata.svg'
@@ -30,7 +29,6 @@ const IcoStats   = () => <svg viewBox="0 0 20 20" fill="none" stroke="currentCol
 const IcoPlay    = () => <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12"><polygon points="5,3 17,10 5,17"/></svg>
 const IcoStop    = () => <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12"><rect x="4" y="4" width="12" height="12" rx="1.5"/></svg>
 const IcoPlus    = () => <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" width="13" height="13"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/></svg>
-const IcoTrash   = () => <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" width="12" height="12"><polyline points="3,6 17,6"/><path d="M8 6V4h4v2"/><rect x="4" y="6" width="12" height="12" rx="1.5"/></svg>
 const IcoCopy    = () => <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" width="12" height="12"><rect x="8" y="8" width="9" height="9" rx="1.5"/><path d="M3 12V4a1 1 0 0 1 1-1h8"/></svg>
 const IcoBlock   = () => <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="13" height="13"><circle cx="10" cy="10" r="8"/><line x1="4" y1="4" x2="16" y2="16"/></svg>
 const IcoUpdate  = () => <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="13" height="13"><path d="M3 10a7 7 0 0 1 7-7 7 7 0 0 1 5 2"/><polyline points="18,10 17,5 12,6"/><path d="M17 10a7 7 0 0 1-7 7 7 7 0 0 1-5-2"/></svg>
@@ -140,9 +138,11 @@ export default function SuricataPage() {
   const { data: tls = [] }    = useQuery({ queryKey: ['suricata-tls'],    queryFn: () => fetchSuricataTLS(200), enabled: tab === 'tls' })
   const { data: logs = [] }   = useQuery({ queryKey: ['suricata-logs'],   queryFn: () => fetchSuricataLogs(500), enabled: tab === 'logs' })
   const { data: statsData = [] } = useQuery({ queryKey: ['suricata-stats'], queryFn: fetchSuricataStats, enabled: tab === 'stats' })
-  const { data: cfgData }     = useQuery({ queryKey: ['suricata-config'], queryFn: fetchSuricataConfig, enabled: tab === 'config',
-    onSuccess: (d) => { if (!configDirty) setConfigRaw(d.raw) }
-  })
+  const { data: cfgData }     = useQuery({ queryKey: ['suricata-config'], queryFn: fetchSuricataConfig, enabled: tab === 'config' })
+  useEffect(() => {
+    if (cfgData && !configDirty) setConfigRaw(cfgData.raw)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfgData])
   const { data: hostbits = [] } = useQuery({ queryKey: ['suricata-hostbits'], queryFn: fetchSuricataHostbits, enabled: tab === 'overview' })
 
   // ── Mutations ──

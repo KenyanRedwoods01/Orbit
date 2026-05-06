@@ -8,303 +8,480 @@
   <meta property="og:title" content="Orbit — Server Management Platform" />
   <meta property="og:description" content="Single-binary VPS panel. Firewall, metrics, deploy, containers, MCP — all in one." />
   <meta property="og:type" content="website" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #0d1117;
-      --bg2:       #161b22;
-      --bg3:       #21262d;
-      --border:    #30363d;
-      --text:      #e6edf3;
-      --text2:     #8b949e;
-      --accent:    #58a6ff;
-      --accent2:   #3fb950;
-      --accent3:   #f78166;
-      --purple:    #bc8cff;
-      --yellow:    #d29922;
-      --glow:      rgba(88,166,255,0.15);
+      --bg:        #080c12;
+      --bg2:       #0f1521;
+      --bg3:       #182032;
+      --bg4:       #1e2a40;
+      --border:    #1f2d42;
+      --border2:   #2a3d58;
+      --text:      #e8f0fe;
+      --text2:     #7a8fa8;
+      --text3:     #4a6080;
+      --accent:    #3b82f6;
+      --accent-lt: #60a5fa;
+      --accent2:   #22c55e;
+      --accent3:   #f97316;
+      --purple:    #a78bfa;
+      --cyan:      #22d3ee;
+      --yellow:    #fbbf24;
+      --danger:    #f43f5e;
+      --glow:      rgba(59,130,246,0.18);
+      --glow2:     rgba(59,130,246,0.06);
       --radius:    12px;
+      --nav-r:     7px;
       --mono:      'JetBrains Mono', monospace;
       --sans:      'Inter', system-ui, sans-serif;
     }
 
     html { scroll-behavior: smooth; }
-
     body {
       font-family: var(--sans);
       background: var(--bg);
       color: var(--text);
       line-height: 1.6;
       -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
     }
 
-    a { color: var(--accent); text-decoration: none; }
+    a { color: var(--accent-lt); text-decoration: none; }
     a:hover { text-decoration: underline; }
 
+    /* ── NAV with 7px border radius ──────────────────────────────────────── */
+    .nav-outer {
+      position: sticky; top: 12px; z-index: 200;
+      padding: 0 20px;
+    }
     nav {
-      position: sticky; top: 0; z-index: 100;
-      background: rgba(13,17,23,0.85);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
+      background: rgba(8,12,18,0.82);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--border2);
+      border-radius: var(--nav-r);
       display: flex; align-items: center; justify-content: space-between;
-      padding: 0 2rem; height: 60px;
+      padding: 0 1.5rem; height: 56px;
+      max-width: 1160px; margin: 0 auto;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(59,130,246,0.06);
     }
     .nav-logo {
-      font-family: var(--mono); font-size: 1.2rem;
+      font-family: var(--mono); font-size: 1.05rem;
       font-weight: 500; color: var(--text);
-      display: flex; align-items: center; gap: 0.5rem;
+      display: flex; align-items: center; gap: 0.4rem;
+      letter-spacing: -0.01em;
     }
-    .nav-logo span { color: var(--accent); }
-    .nav-links { display: flex; gap: 1.5rem; font-size: 0.9rem; }
-    .nav-links a { color: var(--text2); }
-    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .nav-logo .orbit { color: var(--accent-lt); }
+    .nav-logo .slash { color: var(--text3); }
+    .nav-links { display: flex; gap: 0.25rem; font-size: 0.875rem; }
+    .nav-links a {
+      color: var(--text2); padding: 0.35rem 0.75rem;
+      border-radius: 5px; transition: color 0.15s, background 0.15s;
+    }
+    .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.05); text-decoration: none; }
+    .nav-right { display: flex; align-items: center; gap: 0.5rem; }
+    .btn-gh {
+      display: flex; align-items: center; gap: 0.4rem;
+      color: var(--text2); font-size: 0.85rem;
+      padding: 0.35rem 0.7rem; border-radius: 5px;
+      border: 1px solid var(--border2);
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .btn-gh:hover { color: var(--text); border-color: var(--accent); text-decoration: none; }
     .btn-nav {
-      background: var(--accent); color: #0d1117;
+      background: var(--accent); color: #fff;
       padding: 0.4rem 1rem; border-radius: 6px;
-      font-weight: 600; font-size: 0.85rem;
+      font-weight: 600; font-size: 0.82rem;
+      transition: background 0.2s, box-shadow 0.2s;
+      box-shadow: 0 2px 12px rgba(59,130,246,0.3);
     }
-    .btn-nav:hover { background: #79c0ff; text-decoration: none; }
+    .btn-nav:hover { background: var(--accent-lt); text-decoration: none; box-shadow: 0 4px 20px rgba(59,130,246,0.45); }
 
+    /* ── HERO ────────────────────────────────────────────────────────────── */
     .hero {
       text-align: center;
-      padding: 6rem 2rem 4rem;
+      padding: 7rem 2rem 5rem;
       position: relative; overflow: hidden;
     }
-    .hero::before {
-      content: '';
-      position: absolute; inset: 0;
-      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(88,166,255,0.08), transparent);
-      pointer-events: none;
+    .hero-glow {
+      position: absolute; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 70% 50% at 50% -5%, rgba(59,130,246,0.12), transparent 60%),
+        radial-gradient(ellipse 40% 30% at 80% 20%, rgba(167,139,250,0.06), transparent 50%);
     }
     .badge {
-      display: inline-block;
-      background: var(--bg3); border: 1px solid var(--border);
-      color: var(--accent); font-size: 0.78rem; font-weight: 500;
-      padding: 0.25rem 0.75rem; border-radius: 100px;
-      margin-bottom: 1.5rem; font-family: var(--mono);
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.25);
+      color: var(--accent-lt); font-size: 0.75rem; font-weight: 500;
+      padding: 0.3rem 0.9rem; border-radius: 100px;
+      margin-bottom: 2rem; font-family: var(--mono);
     }
+    .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent2); display: inline-block; }
     .hero h1 {
-      font-size: clamp(2.2rem, 6vw, 4rem);
-      font-weight: 700; line-height: 1.15;
-      letter-spacing: -0.02em; margin-bottom: 1.25rem;
+      font-size: clamp(2.4rem, 7vw, 4.4rem);
+      font-weight: 800; line-height: 1.1;
+      letter-spacing: -0.035em; margin-bottom: 1.5rem;
     }
-    .hero h1 .highlight { color: var(--accent); }
-    .hero p {
-      font-size: 1.15rem; color: var(--text2);
-      max-width: 580px; margin: 0 auto 2.5rem;
+    .hero h1 .word-sec { color: var(--text); }
+    .hero h1 .word-mgmt {
+      background: linear-gradient(135deg, var(--accent-lt) 0%, var(--purple) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
-    .hero-buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .hero-sub {
+      font-size: 1.1rem; color: var(--text2);
+      max-width: 560px; margin: 0 auto 2.5rem;
+      line-height: 1.7;
+    }
+    .hero-buttons { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; margin-bottom: 3rem; }
     .btn-primary {
-      background: var(--accent); color: #0d1117;
+      background: var(--accent); color: #fff;
       padding: 0.75rem 1.75rem; border-radius: 8px;
       font-weight: 600; font-size: 0.95rem;
-      transition: background 0.2s, transform 0.1s;
+      box-shadow: 0 4px 20px rgba(59,130,246,0.4);
+      transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+      display: flex; align-items: center; gap: 0.4rem;
     }
-    .btn-primary:hover { background: #79c0ff; text-decoration: none; transform: translateY(-1px); }
+    .btn-primary:hover { background: var(--accent-lt); text-decoration: none; transform: translateY(-1px); box-shadow: 0 6px 28px rgba(59,130,246,0.5); }
     .btn-secondary {
-      background: var(--bg3); color: var(--text);
+      background: rgba(255,255,255,0.04); color: var(--text);
       padding: 0.75rem 1.75rem; border-radius: 8px;
       font-weight: 500; font-size: 0.95rem;
-      border: 1px solid var(--border);
-      transition: border-color 0.2s, transform 0.1s;
+      border: 1px solid var(--border2);
+      transition: border-color 0.2s, transform 0.1s, background 0.2s;
     }
-    .btn-secondary:hover { border-color: var(--accent); text-decoration: none; transform: translateY(-1px); }
+    .btn-secondary:hover { border-color: var(--accent); background: rgba(59,130,246,0.06); text-decoration: none; transform: translateY(-1px); }
 
-    .install-block {
-      max-width: 680px; margin: 3rem auto 0;
-      background: var(--bg2); border: 1px solid var(--border);
-      border-radius: var(--radius); overflow: hidden;
-    }
-    .install-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0.65rem 1rem;
-      background: var(--bg3); border-bottom: 1px solid var(--border);
-      font-size: 0.78rem; color: var(--text2);
-    }
-    .install-dots { display: flex; gap: 6px; }
-    .install-dots span { width: 12px; height: 12px; border-radius: 50%; }
-    .install-dots span:nth-child(1) { background: #ff5f57; }
-    .install-dots span:nth-child(2) { background: #febc2e; }
-    .install-dots span:nth-child(3) { background: #28c840; }
-    .install-code {
-      padding: 1.25rem 1.5rem;
-      font-family: var(--mono); font-size: 0.88rem;
-      color: var(--text2); white-space: pre; overflow-x: auto;
-    }
-    .install-code .cmd-prefix { color: var(--accent2); user-select: none; }
-    .install-code .cmd { color: var(--text); }
-    .install-code .comment { color: #484f58; }
-
-    .stats {
-      display: flex; justify-content: center; gap: 3rem; flex-wrap: wrap;
-      padding: 2.5rem 2rem;
-      border-top: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
-    }
-    .stat { text-align: center; }
-    .stat-num { font-size: 1.75rem; font-weight: 700; color: var(--accent); font-family: var(--mono); }
-    .stat-label { font-size: 0.82rem; color: var(--text2); margin-top: 0.2rem; }
-
-    section { padding: 5rem 2rem; max-width: 1100px; margin: 0 auto; }
-    .section-label {
-      font-size: 0.78rem; font-weight: 600; letter-spacing: 0.1em;
-      text-transform: uppercase; color: var(--accent); margin-bottom: 0.75rem;
-    }
-    section h2 {
-      font-size: clamp(1.6rem, 4vw, 2.4rem); font-weight: 700;
-      line-height: 1.2; margin-bottom: 1rem;
-    }
-    section > p {
-      color: var(--text2); font-size: 1.05rem;
-      max-width: 600px; margin-bottom: 3rem;
-    }
-
-    .features {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 1.25rem;
-    }
-    .feature-card {
-      background: var(--bg2); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 1.5rem;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-    .feature-card:hover {
-      border-color: var(--accent);
-      box-shadow: 0 0 20px var(--glow);
-    }
-    .feature-icon {
-      font-size: 1.3rem; margin-bottom: 0.75rem;
-      color: var(--accent);
-    }
-    .feature-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.4rem; }
-    .feature-card p { font-size: 0.88rem; color: var(--text2); line-height: 1.55; }
-
-    .port-table {
-      width: 100%; border-collapse: collapse;
-      font-size: 0.9rem; margin-top: 1.5rem;
-    }
-    .port-table th {
-      text-align: left; padding: 0.6rem 1rem;
-      background: var(--bg3); color: var(--text2);
-      font-weight: 500; font-size: 0.78rem;
-      text-transform: uppercase; letter-spacing: 0.05em;
-      border-bottom: 1px solid var(--border);
-    }
-    .port-table td { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); }
-    .port-table tr:last-child td { border-bottom: none; }
-    .port-table tr:hover td { background: var(--bg3); }
-    .port-mono { font-family: var(--mono); color: var(--accent); }
-    .tag {
-      display: inline-block; font-size: 0.72rem; font-weight: 500;
-      padding: 0.15rem 0.5rem; border-radius: 4px;
-    }
-    .tag-default { background: rgba(88,166,255,0.15); color: var(--accent); }
-    .tag-optional { background: rgba(63,185,80,0.15); color: var(--accent2); }
-
+    /* ── CODE BLOCK with copy button ─────────────────────────────────────── */
     .code-block {
       background: var(--bg2); border: 1px solid var(--border);
       border-radius: var(--radius); overflow: hidden; margin: 1.25rem 0;
+      position: relative;
     }
     .code-block-header {
       display: flex; align-items: center; justify-content: space-between;
       padding: 0.6rem 1rem; background: var(--bg3);
       border-bottom: 1px solid var(--border);
-      font-size: 0.78rem; color: var(--text2); font-family: var(--mono);
+      font-size: 0.76rem; color: var(--text2); font-family: var(--mono);
     }
+    .code-block-header .lang-tag {
+      color: var(--text3); font-size: 0.7rem;
+    }
+    .copy-btn {
+      display: flex; align-items: center; gap: 5px;
+      background: rgba(255,255,255,0.06); border: 1px solid var(--border2);
+      color: var(--text2); font-size: 0.72rem; font-family: var(--sans);
+      padding: 0.2rem 0.6rem; border-radius: 5px;
+      cursor: pointer; transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .copy-btn:hover { background: rgba(59,130,246,0.12); color: var(--accent-lt); border-color: rgba(59,130,246,0.3); }
+    .copy-btn.copied { color: var(--accent2); border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.08); }
+    .copy-btn svg { flex-shrink: 0; }
     .code-block pre {
       padding: 1.25rem 1.5rem;
-      font-family: var(--mono); font-size: 0.85rem;
-      color: var(--text); overflow-x: auto; line-height: 1.6;
+      font-family: var(--mono); font-size: 0.84rem;
+      color: var(--text); overflow-x: auto; line-height: 1.7;
     }
-    .c-green  { color: var(--accent2); }
-    .c-blue   { color: var(--accent); }
-    .c-purple { color: var(--purple); }
-    .c-yellow { color: var(--yellow); }
-    .c-dim    { color: #484f58; }
+    .c-green  { color: #4ade80; }
+    .c-blue   { color: #60a5fa; }
+    .c-purple { color: #c4b5fd; }
+    .c-yellow { color: #fbbf24; }
+    .c-cyan   { color: #22d3ee; }
+    .c-dim    { color: #3d5068; }
 
-    .workflow-list { display: grid; gap: 1rem; }
+    /* ── INLINE INSTALL BLOCK ────────────────────────────────────────────── */
+    .install-block {
+      max-width: 700px; margin: 0 auto;
+      background: var(--bg2); border: 1px solid var(--border2);
+      border-radius: var(--radius); overflow: hidden;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+    }
+    .install-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.65rem 1rem;
+      background: var(--bg3); border-bottom: 1px solid var(--border);
+      font-size: 0.76rem; color: var(--text2);
+    }
+    .install-dots { display: flex; gap: 6px; }
+    .install-dots span { width: 11px; height: 11px; border-radius: 50%; }
+    .install-dots span:nth-child(1) { background: #ff5f57; }
+    .install-dots span:nth-child(2) { background: #febc2e; }
+    .install-dots span:nth-child(3) { background: #28c840; }
+    .install-code {
+      padding: 1.25rem 1.5rem;
+      font-family: var(--mono); font-size: 0.85rem;
+      color: var(--text2); line-height: 1.9; overflow-x: auto;
+    }
+    .install-code .cmd-prefix { color: var(--accent2); user-select: none; }
+    .install-code .cmd { color: var(--text); }
+    .install-code .comment { color: #2a3d58; }
+
+    /* ── STATS ───────────────────────────────────────────────────────────── */
+    .stats-wrap {
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(59,130,246,0.02), transparent);
+    }
+    .stats {
+      display: flex; justify-content: center; gap: 0; flex-wrap: wrap;
+      max-width: 960px; margin: 0 auto;
+    }
+    .stat {
+      text-align: center; padding: 2rem 3rem;
+      border-right: 1px solid var(--border);
+      flex: 1; min-width: 140px;
+    }
+    .stat:last-child { border-right: none; }
+    .stat-num {
+      font-size: 2rem; font-weight: 800; color: var(--accent-lt);
+      font-family: var(--mono); letter-spacing: -0.04em;
+    }
+    .stat-label { font-size: 0.8rem; color: var(--text2); margin-top: 0.25rem; }
+
+    /* ── SCREENSHOTS ─────────────────────────────────────────────────────── */
+    .screenshots {
+      padding: 5rem 2rem;
+      background: linear-gradient(180deg, transparent, rgba(59,130,246,0.025), transparent);
+    }
+    .screenshots-inner { max-width: 1160px; margin: 0 auto; }
+    .ss-header { text-align: center; margin-bottom: 3rem; }
+    .ss-header .section-label { margin-bottom: 0.75rem; }
+    .ss-header h2 { font-size: clamp(1.6rem, 4vw, 2.4rem); font-weight: 700; margin-bottom: 0.75rem; }
+    .ss-header p { color: var(--text2); font-size: 1rem; max-width: 520px; margin: 0 auto; }
+    .ss-tabs {
+      display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;
+      margin-bottom: 2rem;
+    }
+    .ss-tab {
+      padding: 0.4rem 1rem; border-radius: 6px; font-size: 0.82rem;
+      border: 1px solid var(--border2); color: var(--text2);
+      cursor: pointer; background: transparent; transition: all 0.15s;
+      font-family: var(--sans);
+    }
+    .ss-tab:hover { border-color: var(--accent); color: var(--text); }
+    .ss-tab.active { background: rgba(59,130,246,0.12); border-color: rgba(59,130,246,0.35); color: var(--accent-lt); }
+    .ss-gallery { display: none; }
+    .ss-gallery.active { display: block; }
+    .ss-img-wrap {
+      background: var(--bg2); border: 1px solid var(--border2);
+      border-radius: 14px; overflow: hidden;
+      box-shadow: 0 20px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(59,130,246,0.07);
+    }
+    .ss-img-bar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 0.6rem 1rem;
+      background: var(--bg3); border-bottom: 1px solid var(--border);
+    }
+    .ss-img-bar .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .ss-img-bar .dot-r { background: #ff5f57; }
+    .ss-img-bar .dot-y { background: #febc2e; }
+    .ss-img-bar .dot-g { background: #28c840; }
+    .ss-img-bar .url-bar {
+      flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 4px; padding: 0.2rem 0.75rem;
+      font-family: var(--mono); font-size: 0.72rem; color: var(--text3);
+      margin: 0 0.5rem;
+    }
+    .ss-img-wrap img {
+      width: 100%; display: block;
+      border-top: none;
+    }
+    .ss-caption {
+      text-align: center; margin-top: 1.25rem;
+      color: var(--text2); font-size: 0.88rem;
+    }
+    .ss-caption strong { color: var(--text); }
+
+    /* ── SECTIONS ────────────────────────────────────────────────────────── */
+    section { padding: 5rem 2rem; max-width: 1160px; margin: 0 auto; }
+    .section-label {
+      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--accent-lt); margin-bottom: 0.75rem;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .section-label::before {
+      content: ''; width: 18px; height: 2px;
+      background: var(--accent); border-radius: 1px; display: inline-block;
+    }
+    section > h2 {
+      font-size: clamp(1.65rem, 4vw, 2.4rem); font-weight: 700;
+      line-height: 1.2; margin-bottom: 1rem; letter-spacing: -0.025em;
+    }
+    section > p {
+      color: var(--text2); font-size: 1.05rem;
+      max-width: 580px; margin-bottom: 3rem;
+    }
+
+    /* ── FEATURES ────────────────────────────────────────────────────────── */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .feature-card {
+      background: var(--bg2); padding: 1.6rem;
+      transition: background 0.2s;
+    }
+    .feature-card:hover { background: var(--bg3); }
+    .feature-icon {
+      width: 38px; height: 38px; border-radius: 9px;
+      background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 1rem; font-size: 1rem; color: var(--accent-lt);
+    }
+    .feature-card h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.4rem; }
+    .feature-card p { font-size: 0.85rem; color: var(--text2); line-height: 1.55; }
+
+    /* ── TABLE ───────────────────────────────────────────────────────────── */
+    .table-wrap {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden; margin-top: 1.5rem;
+    }
+    .port-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .port-table th {
+      text-align: left; padding: 0.7rem 1.25rem;
+      background: var(--bg3); color: var(--text2);
+      font-weight: 500; font-size: 0.72rem;
+      text-transform: uppercase; letter-spacing: 0.07em;
+      border-bottom: 1px solid var(--border);
+    }
+    .port-table td { padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--border); }
+    .port-table tr:last-child td { border-bottom: none; }
+    .port-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .port-mono { font-family: var(--mono); color: var(--accent-lt); }
+    .tag {
+      display: inline-block; font-size: 0.7rem; font-weight: 600;
+      padding: 0.15rem 0.55rem; border-radius: 4px; letter-spacing: 0.02em;
+    }
+    .tag-default { background: rgba(59,130,246,0.12); color: var(--accent-lt); border: 1px solid rgba(59,130,246,0.2); }
+    .tag-optional { background: rgba(34,197,94,0.1); color: var(--accent2); border: 1px solid rgba(34,197,94,0.2); }
+
+    /* ── WORKFLOWS ───────────────────────────────────────────────────────── */
+    .workflow-list { display: grid; gap: 0.75rem; }
     .workflow-item {
       display: flex; gap: 1rem; align-items: flex-start;
       background: var(--bg2); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 1.25rem;
+      border-radius: var(--radius); padding: 1.25rem 1.5rem;
+      transition: border-color 0.2s;
     }
+    .workflow-item:hover { border-color: var(--border2); }
     .workflow-num {
       flex-shrink: 0;
-      width: 28px; height: 28px; border-radius: 50%;
-      background: var(--accent); color: #0d1117;
+      width: 30px; height: 30px; border-radius: 8px;
+      background: var(--accent); color: #fff;
       display: flex; align-items: center; justify-content: center;
       font-weight: 700; font-size: 0.8rem;
+      box-shadow: 0 2px 10px rgba(59,130,246,0.3);
     }
-    .workflow-item h4 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .workflow-item h4 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.3rem; }
     .workflow-item p { font-size: 0.85rem; color: var(--text2); }
     .workflow-badge {
-      font-family: var(--mono); font-size: 0.72rem;
-      color: var(--purple); background: rgba(188,140,255,0.1);
-      padding: 0.15rem 0.5rem; border-radius: 4px; margin-left: 0.5rem;
+      font-family: var(--mono); font-size: 0.68rem;
+      color: var(--purple); background: rgba(167,139,250,0.1);
+      padding: 0.15rem 0.55rem; border-radius: 4px;
+      margin-left: 0.5rem; border: 1px solid rgba(167,139,250,0.15);
     }
 
+    /* ── DOCS GRID ───────────────────────────────────────────────────────── */
     .docs-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-      gap: 1rem; margin-top: 2rem;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-top: 2rem;
     }
     .doc-card {
-      background: var(--bg2); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 1.25rem;
-      transition: border-color 0.2s; display: block;
+      background: var(--bg2); padding: 1.4rem;
+      transition: background 0.2s; display: block;
     }
-    .doc-card:hover { border-color: var(--accent); text-decoration: none; }
-    .doc-card h4 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.3rem; color: var(--text); }
-    .doc-card p { font-size: 0.82rem; color: var(--text2); }
+    .doc-card:hover { background: var(--bg3); text-decoration: none; }
+    .doc-card h4 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.3rem; color: var(--text); }
+    .doc-card p { font-size: 0.8rem; color: var(--text2); line-height: 1.5; }
     .doc-card .doc-icon {
-      font-size: 1.1rem; margin-bottom: 0.6rem; color: var(--accent);
+      font-size: 1rem; margin-bottom: 0.65rem; color: var(--accent-lt);
+      width: 34px; height: 34px; border-radius: 8px;
+      background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.15);
+      display: flex; align-items: center; justify-content: center;
     }
 
+    /* ── DIVIDER ─────────────────────────────────────────────────────────── */
+    .divider { border: none; border-top: 1px solid var(--border); }
+
+    /* ── FOOTER ──────────────────────────────────────────────────────────── */
     footer {
       border-top: 1px solid var(--border);
       padding: 2.5rem 2rem;
-      text-align: center; color: var(--text2); font-size: 0.85rem;
+      text-align: center; color: var(--text2); font-size: 0.83rem;
     }
     footer a { color: var(--text2); }
     footer a:hover { color: var(--text); }
-    .footer-links { display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1rem; }
-    .divider { border: none; border-top: 1px solid var(--border); }
+    .footer-links { display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 0.75rem; }
 
-    @media (max-width: 640px) {
+    /* ── RESPONSIVE ──────────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
       .nav-links { display: none; }
-      .stats { gap: 1.5rem; }
+      .stat { border-right: none; border-bottom: 1px solid var(--border); }
+      .stat:last-child { border-bottom: none; }
+    }
+    @media (max-width: 480px) {
+      nav { padding: 0 1rem; }
+      .nav-outer { padding: 0 10px; }
     }
   </style>
 </head>
 <body>
 
-<nav>
-  <div class="nav-logo"><span>//</span> orbit</div>
-  <div class="nav-links">
-    <a href="#features">Features</a>
-    <a href="#install">Install</a>
-    <a href="#ports">Ports</a>
-    <a href="#workflows">CI/CD</a>
-    <a href="#docs">Docs</a>
-    <a href="https://github.com/KenyanRedwoods01/Orbit" target="_blank">GitHub</a>
-  </div>
-  <a class="btn-nav" href="https://github.com/KenyanRedwoods01/Orbit/releases/latest" target="_blank">Download</a>
-</nav>
+<div class="nav-outer">
+  <nav>
+    <div class="nav-logo">
+      <span class="slash">//</span>
+      <span class="orbit">orbit</span>
+    </div>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#screenshots">Preview</a>
+      <a href="#install">Install</a>
+      <a href="#ports">Ports</a>
+      <a href="#workflows">CI/CD</a>
+      <a href="#docs">Docs</a>
+    </div>
+    <div class="nav-right">
+      <a class="btn-gh" href="https://github.com/KenyanRedwoods01/Orbit" target="_blank">
+        <i class="fab fa-github"></i> GitHub
+      </a>
+      <a class="btn-nav" href="https://github.com/KenyanRedwoods01/Orbit/releases/latest" target="_blank">Download</a>
+    </div>
+  </nav>
+</div>
 
 <header class="hero">
-  <div class="badge">v1.0 — Now Available</div>
-  <h1>Security-First<br/><span class="highlight">Server Management</span></h1>
-  <p>A single Go binary that turns any Linux server into a fully managed VPS — with real-time metrics, GitOps deployments, firewall control, container management, and MCP support.</p>
+  <div class="hero-glow"></div>
+  <div class="badge">v0.1.0 &nbsp;·&nbsp; Dev Release</div>
+  <h1>
+    <span class="word-sec">Security-First</span><br/>
+    <span class="word-mgmt">Server Management</span>
+  </h1>
+  <p class="hero-sub">A single Go binary that turns any Linux server into a fully managed VPS — real-time metrics, GitOps deployments, firewall control, containers, and MCP support. Zero dependencies.</p>
   <div class="hero-buttons">
-    <a class="btn-primary" href="#install">Quick Install</a>
+    <a class="btn-primary" href="#install">
+      <i class="fas fa-download" style="font-size:0.82em"></i> Quick Install
+    </a>
     <a class="btn-secondary" href="https://github.com/KenyanRedwoods01/Orbit" target="_blank">View on GitHub &rarr;</a>
   </div>
 
@@ -312,9 +489,13 @@
     <div class="install-header">
       <div class="install-dots"><span></span><span></span><span></span></div>
       <span>bash &mdash; one-line install</span>
-      <span></span>
+      <button class="copy-btn" onclick="copyText(this,'curl -fsSL https://raw.githubusercontent.com/KenyanRedwoods01/Orbit/main/scripts/install.sh | sudo bash')">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Copy
+      </button>
     </div>
-    <div class="install-code"><span class="comment"># One command &mdash; installs binary, systemd service, and config</span>
+    <div class="install-code">
+<span class="comment"># Installs binary, systemd service, and config — one command</span>
 <span class="cmd-prefix">$</span> <span class="cmd">curl -fsSL https://raw.githubusercontent.com/KenyanRedwoods01/Orbit/main/scripts/install.sh | sudo bash</span>
 
 <span class="comment"># Custom port (default: 5000, range: 5000-6000)</span>
@@ -322,29 +503,111 @@
   </div>
 </header>
 
-<div class="stats">
-  <div class="stat">
-    <div class="stat-num">1</div>
-    <div class="stat-label">binary, zero deps</div>
-  </div>
-  <div class="stat">
-    <div class="stat-num">5000</div>
-    <div class="stat-label">default port</div>
-  </div>
-  <div class="stat">
-    <div class="stat-num">15+</div>
-    <div class="stat-label">built-in modules</div>
-  </div>
-  <div class="stat">
-    <div class="stat-num">AGPL</div>
-    <div class="stat-label">open source</div>
+<div class="stats-wrap">
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-num">1</div>
+      <div class="stat-label">binary, zero deps</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">5000</div>
+      <div class="stat-label">default port</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">15+</div>
+      <div class="stat-label">built-in modules</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">Go</div>
+      <div class="stat-label">single binary</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">AGPL</div>
+      <div class="stat-label">open source</div>
+    </div>
   </div>
 </div>
 
+<!-- ── SCREENSHOTS ──────────────────────────────────────────────────────── -->
+<div class="screenshots" id="screenshots">
+  <div class="screenshots-inner">
+    <div class="ss-header">
+      <div class="section-label">Preview</div>
+      <h2>See it in action</h2>
+      <p>A full-featured server management dashboard, live in your browser.</p>
+    </div>
+    <div class="ss-tabs">
+      <button class="ss-tab active" onclick="showTab(this,'tab-dashboard')">Dashboard</button>
+      <button class="ss-tab" onclick="showTab(this,'tab-metrics')">Metrics</button>
+      <button class="ss-tab" onclick="showTab(this,'tab-alerts')">Alerts</button>
+      <button class="ss-tab" onclick="showTab(this,'tab-alert-form')">Alert Form</button>
+      <button class="ss-tab" onclick="showTab(this,'tab-login')">Login</button>
+    </div>
+
+    <div id="tab-dashboard" class="ss-gallery active">
+      <div class="ss-img-wrap">
+        <div class="ss-img-bar">
+          <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+          <span class="url-bar">https://orbit.example.com/metrics</span>
+        </div>
+        <img src="assets/screenshot-dash.png" alt="Orbit VPS Dashboard — server health overview" loading="lazy" />
+      </div>
+      <p class="ss-caption"><strong>Server Dashboard</strong> — live server health, uptime, grade score, and timezone overview</p>
+    </div>
+
+    <div id="tab-metrics" class="ss-gallery">
+      <div class="ss-img-wrap">
+        <div class="ss-img-bar">
+          <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+          <span class="url-bar">https://orbit.example.com/metrics</span>
+        </div>
+        <img src="assets/screenshot-dash-overview.png" alt="Orbit VPS — fleet overview and resource monitoring" loading="lazy" />
+      </div>
+      <p class="ss-caption"><strong>Fleet Overview</strong> — multi-server health status with live CPU, RAM, and disk charts</p>
+    </div>
+
+    <div id="tab-alerts" class="ss-gallery">
+      <div class="ss-img-wrap">
+        <div class="ss-img-bar">
+          <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+          <span class="url-bar">https://orbit.example.com/alerts</span>
+        </div>
+        <img src="assets/screenshot-alert.png" alt="Orbit VPS — Alert Rules page" loading="lazy" />
+      </div>
+      <p class="ss-caption"><strong>Alert Rules</strong> — real-time threshold monitoring with multi-channel notifications</p>
+    </div>
+
+    <div id="tab-alert-form" class="ss-gallery">
+      <div class="ss-img-wrap">
+        <div class="ss-img-bar">
+          <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+          <span class="url-bar">https://orbit.example.com/alerts</span>
+        </div>
+        <img src="assets/screenshot-alert-form.png" alt="Orbit VPS — Create Alert Rule dialog" loading="lazy" />
+      </div>
+      <p class="ss-caption"><strong>Create Alert Rule</strong> — configure metric, operator, threshold, and notification channel</p>
+    </div>
+
+    <div id="tab-login" class="ss-gallery">
+      <div class="ss-img-wrap">
+        <div class="ss-img-bar">
+          <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+          <span class="url-bar">https://orbit.example.com/login</span>
+        </div>
+        <img src="assets/screenshot-login.png" alt="Orbit VPS — Login page" loading="lazy" />
+      </div>
+      <p class="ss-caption"><strong>Secure Login</strong> — clean authentication with optional 2FA and session management</p>
+    </div>
+  </div>
+</div>
+
+<hr class="divider" />
+
+<!-- ── FEATURES ──────────────────────────────────────────────────────────── -->
 <section id="features">
   <div class="section-label">Features</div>
   <h2>Everything your server needs</h2>
-  <p>Orbit ships all modules in one binary. Enable or disable each independently in <code>orbit.toml</code>.</p>
+  <p>All modules ship in one binary. Enable or disable each independently via <code>orbit.toml</code>.</p>
   <div class="features">
     <div class="feature-card">
       <div class="feature-icon"><i class="fas fa-chart-bar"></i></div>
@@ -352,7 +615,7 @@
       <p>CPU, memory, disk, and network graphs streamed live over WebSocket. Per-process stats via /proc.</p>
     </div>
     <div class="feature-card">
-      <div class="feature-icon"><i class="fas fa-lock"></i></div>
+      <div class="feature-icon"><i class="fas fa-shield-halved"></i></div>
       <h3>Security Suite</h3>
       <p>Integrated Wazuh, Suricata, CrowdSec, and Fail2ban management. Audit logs and RBAC built in.</p>
     </div>
@@ -372,11 +635,6 @@
       <p>Full Docker lifecycle &mdash; pull, run, inspect, shell, logs &mdash; all from the browser.</p>
     </div>
     <div class="feature-card">
-      <div class="feature-icon"><i class="fas fa-database"></i></div>
-      <h3>Database Manager</h3>
-      <p>Connect to PostgreSQL, MySQL, MongoDB, and Redis. Visual query builder and backup scheduler.</p>
-    </div>
-    <div class="feature-card">
       <div class="feature-icon"><i class="fas fa-globe"></i></div>
       <h3>Web Server Manager</h3>
       <p>Nginx/Apache vhost management, SSL certificates via Let's Encrypt, and live config editing.</p>
@@ -384,7 +642,7 @@
     <div class="feature-card">
       <div class="feature-icon"><i class="fas fa-clock"></i></div>
       <h3>Uptime Monitoring</h3>
-      <p>HTTP and TCP monitors with incident timelines, status pages, and alerting.</p>
+      <p>HTTP and TCP monitors with incident timelines, status pages, and multi-channel alerting.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon"><i class="fas fa-robot"></i></div>
@@ -393,13 +651,18 @@
     </div>
     <div class="feature-card">
       <div class="feature-icon"><i class="fas fa-server"></i></div>
-      <h3>Multi-Server</h3>
+      <h3>Multi-Server Fleet</h3>
       <p>Manage a fleet of remote servers over SSH from a single Orbit instance.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon"><i class="fas fa-folder-open"></i></div>
       <h3>File Explorer</h3>
       <p>SFTP-backed file browser with upload, download, edit, and permission management.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon"><i class="fas fa-bell"></i></div>
+      <h3>Alert Rules</h3>
+      <p>Real-time threshold monitoring across any metric. Fires to email, Slack, webhook, and more.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon"><i class="fas fa-code-branch"></i></div>
@@ -411,27 +674,34 @@
 
 <hr class="divider" />
 
+<!-- ── INSTALL ───────────────────────────────────────────────────────────── -->
 <section id="install">
   <div class="section-label">Installation</div>
   <h2>Three ways to install</h2>
-  <p>All methods use port <strong>5000</strong> by default. Every port Orbit uses must be in the range <strong>5000&ndash;6000</strong>.</p>
+  <p>All methods default to port <strong>5000</strong>. Every port must be in range <strong>5000&ndash;6000</strong>.</p>
 
   <div class="code-block">
     <div class="code-block-header">
-      <span>Method 1 &mdash; One-liner (recommended)</span>
-      <span>bash</span>
+      <span>Method 1 &mdash; One-liner <span style="color:var(--accent2);font-size:0.68rem;margin-left:6px;font-weight:600;">recommended</span></span>
+      <button class="copy-btn" onclick="copyBlock(this)">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Copy
+      </button>
     </div>
     <pre><span class="c-dim"># Installs binary, creates system user, writes config, enables systemd service</span>
 <span class="c-green">curl</span> -fsSL https://raw.githubusercontent.com/KenyanRedwoods01/Orbit/main/scripts/install.sh | <span class="c-green">sudo</span> bash
 
-<span class="c-dim"># With options</span>
+<span class="c-dim"># With custom options</span>
 <span class="c-green">sudo</span> bash install.sh --port 5100 --version v1.2.0</pre>
   </div>
 
   <div class="code-block">
     <div class="code-block-header">
       <span>Method 2 &mdash; Clone and install</span>
-      <span>bash</span>
+      <button class="copy-btn" onclick="copyBlock(this)">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Copy
+      </button>
     </div>
     <pre><span class="c-green">git</span> clone https://github.com/KenyanRedwoods01/Orbit.git
 <span class="c-green">cd</span> Orbit
@@ -441,15 +711,18 @@
   <div class="code-block">
     <div class="code-block-header">
       <span>Method 3 &mdash; Docker (builds from source)</span>
-      <span>bash</span>
+      <button class="copy-btn" onclick="copyBlock(this)">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Copy
+      </button>
     </div>
-    <pre><span class="c-dim"># Clone and build &mdash; Docker image is built locally from source</span>
+    <pre><span class="c-dim"># Clone and build — Docker image is built locally from source</span>
 <span class="c-green">git</span> clone https://github.com/KenyanRedwoods01/Orbit.git
 <span class="c-green">cd</span> Orbit
 <span class="c-green">cp</span> .env.example .env  <span class="c-dim"># set ORBIT_SECRET_KEY</span>
 <span class="c-green">docker</span> compose up -d  <span class="c-dim"># builds image then starts on port 5000</span>
 
-<span class="c-dim"># Or build + run manually</span>
+<span class="c-dim"># Or run a manually built image</span>
 <span class="c-green">docker</span> build -t orbit .
 <span class="c-green">docker</span> run -d --name orbit \
   --cap-add NET_ADMIN --cap-add SYS_PTRACE \
@@ -460,27 +733,28 @@
   <div class="code-block">
     <div class="code-block-header">
       <span>Installer options</span>
-      <span>bash</span>
+      <span class="lang-tag">bash</span>
     </div>
     <pre>Usage: install.sh [OPTIONS]
 
-  <span class="c-blue">--version, -v</span>  VERSION    Release tag to install  (default: latest)
-  <span class="c-blue">--port, -p</span>     PORT       Main panel port [5000-6000]  (default: 5000)
-  <span class="c-blue">--mcp-port</span>     PORT       MCP TCP port    [5000-6000]  (default: 5001)
-  <span class="c-blue">--metrics-port</span> PORT       Metrics port    [5000-6000]  (default: 5002)
-  <span class="c-blue">--no-start</span>                Install without starting
+  <span class="c-blue">--version, -v</span>  VERSION    Release tag to install  <span class="c-dim">(default: latest)</span>
+  <span class="c-blue">--port, -p</span>     PORT       Main panel port [5000-6000]  <span class="c-dim">(default: 5000)</span>
+  <span class="c-blue">--mcp-port</span>     PORT       MCP TCP port    [5000-6000]  <span class="c-dim">(default: 5001)</span>
+  <span class="c-blue">--metrics-port</span> PORT       Metrics port    [5000-6000]  <span class="c-dim">(default: 5002)</span>
+  <span class="c-blue">--no-start</span>                Install without starting the service
   <span class="c-blue">--uninstall</span>               Remove Orbit from this system
-  <span class="c-blue">--help, -h</span>                Show this help</pre>
+  <span class="c-blue">--help, -h</span>                Show this help message</pre>
   </div>
 </section>
 
 <hr class="divider" />
 
+<!-- ── PORTS ─────────────────────────────────────────────────────────────── -->
 <section id="ports">
   <div class="section-label">Port Reference</div>
   <h2>Port range: 5000&ndash;6000</h2>
-  <p>All Orbit services are confined to ports 5000&ndash;6000. The installer validates every port assignment before proceeding.</p>
-  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+  <p>All Orbit services are confined to ports 5000&ndash;6000. The installer validates every assignment before proceeding.</p>
+  <div class="table-wrap">
     <table class="port-table">
       <thead>
         <tr>
@@ -519,6 +793,7 @@
 
 <hr class="divider" />
 
+<!-- ── CI/CD ──────────────────────────────────────────────────────────────── -->
 <section id="workflows">
   <div class="section-label">CI / CD</div>
   <h2>GitHub Actions workflows</h2>
@@ -528,14 +803,14 @@
       <div class="workflow-num">1</div>
       <div>
         <h4>CI <span class="workflow-badge">.github/workflows/ci.yml</span></h4>
-        <p>Runs on every push and PR. Runs <code>golangci-lint</code>, Go tests with race detection, frontend type-check and build, and uploads a smoke-test binary artifact.</p>
+        <p>Runs on every push and PR. Runs <code>golangci-lint</code>, Go tests with race detection, frontend build, and uploads a smoke-test binary artifact.</p>
       </div>
     </div>
     <div class="workflow-item">
       <div class="workflow-num">2</div>
       <div>
         <h4>Release <span class="workflow-badge">.github/workflows/release.yml</span></h4>
-        <p>Triggered by a version tag (<code>v*.*.*</code>). Runs GoReleaser to build Linux binaries (amd64, arm64, armv7), creates .deb/.rpm packages, builds a multi-arch Docker image, and publishes to GHCR.</p>
+        <p>Triggered by a version tag (<code>v*.*.*</code>). Runs GoReleaser to build Linux binaries (amd64, arm64, armv7), creates .deb/.rpm packages, and publishes a multi-arch Docker image to GHCR.</p>
       </div>
     </div>
     <div class="workflow-item">
@@ -549,7 +824,7 @@
       <div class="workflow-num">4</div>
       <div>
         <h4>Security Scan <span class="workflow-badge">.github/workflows/security.yml</span></h4>
-        <p>Weekly and on every main push: runs <code>govulncheck</code> for Go CVEs and CodeQL analysis for Go and JavaScript.</p>
+        <p>Weekly and on every main push: runs <code>govulncheck</code> for Go CVEs and CodeQL analysis for both Go and JavaScript source.</p>
       </div>
     </div>
   </div>
@@ -557,25 +832,29 @@
   <div class="code-block" style="margin-top:2rem;">
     <div class="code-block-header">
       <span>Create a release</span>
-      <span>bash</span>
+      <button class="copy-btn" onclick="copyBlock(this)">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Copy
+      </button>
     </div>
-    <pre><span class="c-dim"># Tag a release &mdash; triggers the release workflow automatically</span>
-<span class="c-green">git</span> tag v1.0.0
-<span class="c-green">git</span> push origin v1.0.0
+    <pre><span class="c-dim"># Tag a release — triggers the release workflow automatically</span>
+<span class="c-green">git</span> tag v0.1.0
+<span class="c-green">git</span> push origin v0.1.0
 
 <span class="c-dim"># GoReleaser builds:</span>
 <span class="c-dim">#  orbit_linux_amd64.tar.gz</span>
 <span class="c-dim">#  orbit_linux_arm64.tar.gz</span>
 <span class="c-dim">#  orbit_linux_armv7.tar.gz</span>
-<span class="c-dim">#  orbit_1.0.0_amd64.deb</span>
-<span class="c-dim">#  orbit_1.0.0_x86_64.rpm</span>
-<span class="c-dim">#  ghcr.io/kenyanredwoods01/orbit:v1.0.0</span>
+<span class="c-dim">#  orbit_0.1.0_amd64.deb</span>
+<span class="c-dim">#  orbit_0.1.0_x86_64.rpm</span>
+<span class="c-dim">#  ghcr.io/kenyanredwoods01/orbit:v0.1.0</span>
 <span class="c-dim">#  checksums.txt</span></pre>
   </div>
 </section>
 
 <hr class="divider" />
 
+<!-- ── CONFIG ─────────────────────────────────────────────────────────────── -->
 <section id="config">
   <div class="section-label">Configuration</div>
   <h2>orbit.toml reference</h2>
@@ -583,9 +862,12 @@
   <div class="code-block">
     <div class="code-block-header">
       <span>/etc/orbit/orbit.toml</span>
-      <span>toml</span>
+      <button class="copy-btn" onclick="copyBlock(this)">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Copy
+      </button>
     </div>
-    <pre><span class="c-dim"># Main listen address &mdash; port must be in range 5000-6000</span>
+    <pre><span class="c-dim"># Main listen address — port must be in range 5000-6000</span>
 <span class="c-blue">listen_addr</span> = <span class="c-green">"0.0.0.0:5000"</span>
 
 <span class="c-blue">data_dir</span>   = <span class="c-green">"/var/lib/orbit"</span>
@@ -606,45 +888,46 @@
 
 <hr class="divider" />
 
+<!-- ── DOCS ───────────────────────────────────────────────────────────────── -->
 <section id="docs">
   <div class="section-label">Documentation</div>
   <h2>Guides &amp; Reference</h2>
   <p>Everything you need to install, configure, and operate Orbit in production.</p>
   <div class="docs-grid">
-    <a class="doc-card" href="docs/installation.html">
+    <a class="doc-card" href="installation.html">
       <div class="doc-icon"><i class="fas fa-box"></i></div>
       <h4>Installation Guide</h4>
-      <p>Step-by-step install for Ubuntu, Debian, CentOS, and Docker environments.</p>
+      <p>Step-by-step install for Ubuntu, Debian, CentOS, and Docker.</p>
     </a>
-    <a class="doc-card" href="docs/configuration.html">
+    <a class="doc-card" href="configuration.html">
       <div class="doc-icon"><i class="fas fa-cog"></i></div>
       <h4>Configuration Reference</h4>
-      <p>All <code>orbit.toml</code> keys, environment variables, and CLI flags documented.</p>
+      <p>All <code>orbit.toml</code> keys, env vars, and CLI flags documented.</p>
     </a>
-    <a class="doc-card" href="docs/api-reference.html">
+    <a class="doc-card" href="api-reference.html">
       <div class="doc-icon"><i class="fas fa-plug"></i></div>
       <h4>API Reference</h4>
-      <p>REST and WebSocket API endpoints. OpenAPI spec at <code>/api/openapi.json</code>.</p>
+      <p>REST and WebSocket endpoints. OpenAPI spec at <code>/api/openapi.json</code>.</p>
     </a>
-    <a class="doc-card" href="docs/mcp.html">
+    <a class="doc-card" href="mcp.html">
       <div class="doc-icon"><i class="fas fa-robot"></i></div>
       <h4>MCP Integration</h4>
-      <p>Connect Claude, GPT, or any MCP-compatible AI assistant to your server.</p>
+      <p>Connect Claude, GPT, or any MCP-compatible AI to your server.</p>
     </a>
-    <a class="doc-card" href="docs/github-actions.html">
+    <a class="doc-card" href="github-actions.html">
       <div class="doc-icon"><i class="fas fa-bolt"></i></div>
       <h4>GitHub Actions</h4>
-      <p>CI/CD workflows, release automation, and Docker publishing explained.</p>
+      <p>CI/CD workflows, release automation, and Docker publishing.</p>
     </a>
-    <a class="doc-card" href="docs/security.html">
+    <a class="doc-card" href="security.html">
       <div class="doc-icon"><i class="fas fa-lock"></i></div>
       <h4>Security Guide</h4>
-      <p>Hardening checklist, capability model, Wazuh/Suricata setup, and audit logs.</p>
+      <p>Hardening checklist, capability model, Wazuh/Suricata setup.</p>
     </a>
-    <a class="doc-card" href="docs/contributing.html">
+    <a class="doc-card" href="contributing.html">
       <div class="doc-icon"><i class="fas fa-handshake"></i></div>
       <h4>Contributing</h4>
-      <p>Dev environment setup, coding conventions, and how to submit a pull request.</p>
+      <p>Dev environment setup, conventions, and how to submit a PR.</p>
     </a>
     <a class="doc-card" href="https://github.com/KenyanRedwoods01/Orbit/releases" target="_blank">
       <div class="doc-icon"><i class="fas fa-tag"></i></div>
@@ -662,8 +945,34 @@
     <a href="https://github.com/KenyanRedwoods01/Orbit/blob/main/CONTRIBUTING.md" target="_blank">Contributing</a>
     <a href="https://github.com/KenyanRedwoods01/Orbit/blob/main/LICENSE" target="_blank">License (AGPL-3.0)</a>
   </div>
-  <p>Built with Go &amp; React &middot; Open source &middot; KenyanRedwoods01</p>
+  <p>Built with Go &amp; React &nbsp;&middot;&nbsp; Open source &nbsp;&middot;&nbsp; KenyanRedwoods01</p>
 </footer>
+
+<script>
+function copyText(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.classList.add('copied');
+    btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><polyline points="2,6 4.5,9 10,3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg> Copied!';
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg> Copy';
+    }, 2000);
+  });
+}
+
+function copyBlock(btn) {
+  const pre = btn.closest('.code-block').querySelector('pre');
+  const text = pre ? pre.textContent : '';
+  copyText(btn, text);
+}
+
+function showTab(btn, tabId) {
+  document.querySelectorAll('.ss-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.ss-gallery').forEach(g => g.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+}
+</script>
 
 </body>
 </html>

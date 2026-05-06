@@ -10,7 +10,7 @@ import {
   reloadWebServer, testWebServerConfig, startWebServer, stopWebServer, restartWebServer,
   saveWebServerGlobal,
   fetchCerts, issueCert, renewCert, selfSignedCert,
-  type NginxSiteAPI, type NginxStatusAPI, type NginxPerfAPI, type NginxGlobalAPI,
+  type NginxSiteAPI,
   type AccessLogLineAPI, type CertEntryAPI,
 } from '@/lib/api'
 
@@ -134,7 +134,6 @@ const IcoRefresh  = () => <svg width="13" height="13" viewBox="0 0 14 14" fill="
 const IcoPlay     = () => <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 2l7 4-7 4V2Z" fill="currentColor"/></svg>
 const IcoStop     = () => <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="2" y="2" width="8" height="8" rx="1.2" fill="currentColor"/></svg>
 const IcoCheck    = () => <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-const IcoDownload = () => <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 2v7M4 7l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/><path d="M2 11h10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
 const IcoWarn     = () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5L1 12.5h12L7 1.5Z" stroke="currentColor" strokeWidth="1.2" fill="none"/><path d="M7 6v3M7 10.5v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
 const IcoLog      = () => <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="2" y="1" width="10" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.2"/><path d="M5 5h4M5 7.5h4M5 10h2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/></svg>
 const IcoChart    = () => <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 10l3-3 2 2 4-5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -864,7 +863,7 @@ function NginxRollingChart({ history }: { history: PerfPoint[] }) {
           )
         })}
         {/* X axis labels */}
-        {history.filter((_, i) => i % labelStep === 0 || i === history.length - 1).map((p, _, arr) => {
+        {history.filter((_, i) => i % labelStep === 0 || i === history.length - 1).map((p, _) => {
           const origIdx = history.indexOf(p)
           const t = new Date(p.t)
           const label = `${t.getHours().toString().padStart(2,'0')}:${t.getMinutes().toString().padStart(2,'0')}:${t.getSeconds().toString().padStart(2,'0')}`
@@ -1114,7 +1113,7 @@ export default function WebServerPage() {
           { label: 'Active Conns',   val: perf?.active_conns ?? '—',  sub: perf ? `R:${perf.reading} W:${perf.writing} Idle:${perf.waiting}` : 'stub_status not available', color: 'rgba(167,139,250,0.12)', icon: <IcoServer />, tc: '#a78bfa' },
           { label: 'SSL Certs',      val: certs.length,    sub: expiring ? `${expiring} need attention` : 'All valid', color: expiring ? 'rgba(246,173,85,0.12)' : 'rgba(34,197,94,0.12)', icon: <IcoLock />, tc: expiring ? '#f6ad55' : '#22c55e' },
           { label: 'Log Entries',    val: logs.length,     sub: `${logs.filter(l => l.status >= 500).length} errors`, color: 'rgba(74,158,255,0.12)', icon: <IcoLog />, tc: 'var(--color-accent)' },
-          { label: 'Config Status',  val: status?.configOK ? 'OK' : status ? 'FAIL' : '—', sub: status?.configOK ? 'nginx -t passed' : 'Run Test Config', color: status?.configOK ? 'rgba(34,197,94,0.12)' : 'rgba(255,77,77,0.12)', icon: <IcoCheck />, tc: status?.configOK ? '#22c55e' : '#ff4d4d' },
+          { label: 'Config Status',  val: status?.config_ok ? 'OK' : status ? 'FAIL' : '—', sub: status?.config_ok ? 'nginx -t passed' : 'Run Test Config', color: status?.config_ok ? 'rgba(34,197,94,0.12)' : 'rgba(255,77,77,0.12)', icon: <IcoCheck />, tc: status?.config_ok ? '#22c55e' : '#ff4d4d' },
         ].map(s => (
           <div key={s.label} className={styles.statCard}>
             <div className={styles.statIcon} style={{ background: s.color }}><span style={{ color: s.tc }}>{s.icon}</span></div>

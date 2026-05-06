@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   fetchApp, fetchAppStatus, fetchAppLogs, fetchAppPreflight,
   installApp, uninstallApp, controlApp,
-  type AppResponse, type AppPreflightResult, type AppLogEntry,
+  type AppResponse,
 } from '@/lib/api'
 import styles from './AppsPage.module.css'
 
@@ -126,7 +126,7 @@ export default function AppDetailPage() {
   })
 
   const controlM = useMutation({
-    mutationFn: (action: string) => controlApp(id!, action),
+    mutationFn: (action: 'start' | 'stop' | 'restart') => controlApp(id!, action),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['apps', id] }) },
   })
 

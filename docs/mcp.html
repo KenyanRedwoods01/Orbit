@@ -4,49 +4,96 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MCP Integration — Orbit</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
-      --text:#e6edf3;--text2:#8b949e;--accent:#58a6ff;--accent2:#3fb950;
-      --purple:#bc8cff;--yellow:#d29922;--red:#f78166;--radius:12px;
+      --bg:#080c12;--bg2:#0f1521;--bg3:#182032;--border:#1f2d42;--border2:#2a3d58;
+      --text:#e8f0fe;--text2:#7a8fa8;--text3:#4a6080;
+      --accent:#3b82f6;--accent-lt:#60a5fa;--accent2:#22c55e;--purple:#a78bfa;--yellow:#fbbf24;--red:#f43f5e;
+      --radius:12px;--nav-r:7px;
       --mono:'JetBrains Mono',monospace;--sans:'Inter',system-ui,sans-serif;
     }
+    html { scroll-behavior:smooth; }
     body { font-family:var(--sans);background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased; }
-    a { color:var(--accent); }
-    nav { position:sticky;top:0;z-index:100;background:rgba(13,17,23,0.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 2rem;height:60px; }
-    .nav-logo { font-family:var(--mono);font-size:1.1rem;color:var(--text); }
-    .nav-logo span { color:var(--accent); }
-    .main { max-width:800px;margin:0 auto;padding:3rem 2rem 6rem; }
-    h1 { font-size:2rem;font-weight:700;margin-bottom:0.5rem; }
+    a { color:var(--accent-lt);text-decoration:none; }
+    a:hover { text-decoration:underline; }
+    .nav-outer { position:sticky;top:12px;z-index:200;padding:0 20px; }
+    nav { background:rgba(8,12,18,0.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--border2);border-radius:var(--nav-r);display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:56px;max-width:1160px;margin:0 auto;box-shadow:0 4px 32px rgba(0,0,0,0.4); }
+    .nav-logo { font-family:var(--mono);font-size:1.05rem;font-weight:500;color:var(--text);display:flex;align-items:center;gap:0.4rem; }
+    .nav-logo .orbit { color:var(--accent-lt); }
+    .nav-logo .slash { color:var(--text3); }
+    .nav-links { display:flex;gap:0.25rem;font-size:0.875rem; }
+    .nav-links a { color:var(--text2);padding:0.35rem 0.75rem;border-radius:5px;transition:color 0.15s,background 0.15s; }
+    .nav-links a:hover { color:var(--text);background:rgba(255,255,255,0.05);text-decoration:none; }
+    .nav-links a.active { color:var(--accent-lt);background:rgba(59,130,246,0.1); }
+    .btn-gh { display:flex;align-items:center;gap:0.4rem;color:var(--text2);font-size:0.85rem;padding:0.35rem 0.7rem;border-radius:5px;border:1px solid var(--border2);transition:color 0.15s,border-color 0.15s; }
+    .btn-gh:hover { color:var(--text);border-color:var(--accent);text-decoration:none; }
+    .main { max-width:800px;margin:0 auto;padding:4rem 2rem 6rem; }
+    .page-title { font-size:2.2rem;font-weight:800;letter-spacing:-0.03em;margin-bottom:0.5rem; }
     .lead { color:var(--text2);margin-bottom:2.5rem;font-size:1.05rem; }
-    h2 { font-size:1.3rem;font-weight:600;margin:2.5rem 0 0.75rem;padding-top:0.5rem;border-top:1px solid var(--border); }
+    h2 { font-size:1.25rem;font-weight:700;margin:2.5rem 0 0.75rem;letter-spacing:-0.015em;display:flex;align-items:center;gap:0.5rem; }
+    h2::before { content:'';width:3px;height:1.1em;background:var(--accent);border-radius:2px;display:inline-block;flex-shrink:0; }
     p { color:var(--text2);margin-bottom:1rem; }
-    code { font-family:var(--mono);font-size:0.85em;background:var(--bg3);padding:0.15em 0.4em;border-radius:4px;color:var(--text); }
+    code { font-family:var(--mono);font-size:0.85em;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.15);padding:0.15em 0.45em;border-radius:4px;color:var(--accent-lt); }
+    ul { padding-left:1.6rem;color:var(--text2);margin-bottom:1.25rem; }
+    li { margin-bottom:0.4rem; }
     .code-block { background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin:1.25rem 0; }
-    .code-block-header { padding:0.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border);font-size:0.78rem;color:var(--text2);font-family:var(--mono); }
-    .code-block pre { padding:1.25rem 1.5rem;font-family:var(--mono);font-size:0.85rem;color:var(--text);overflow-x:auto;line-height:1.6; }
-    .c-blue{color:#58a6ff}.c-green{color:#3fb950}.c-purple{color:#bc8cff}.c-yellow{color:#d29922}.c-dim{color:#484f58}
-    ul { padding-left:1.5rem;color:var(--text2);margin-bottom:1rem; }
-    li { margin-bottom:0.35rem; }
-    .note { background:rgba(247,129,102,0.08);border:1px solid rgba(247,129,102,0.3);border-radius:8px;padding:1rem 1.25rem;margin:1.25rem 0;font-size:0.9rem; }
-    .note strong { color:var(--red); }
+    .code-block-header { display:flex;align-items:center;justify-content:space-between;padding:0.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border);font-size:0.76rem;color:var(--text2);font-family:var(--mono); }
+    .copy-btn { display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.06);border:1px solid var(--border2);color:var(--text2);font-size:0.72rem;font-family:var(--sans);padding:0.2rem 0.6rem;border-radius:5px;cursor:pointer;transition:all 0.15s;white-space:nowrap; }
+    .copy-btn:hover { background:rgba(59,130,246,0.12);color:var(--accent-lt);border-color:rgba(59,130,246,0.3); }
+    .copy-btn.copied { color:var(--accent2);border-color:rgba(34,197,94,0.3);background:rgba(34,197,94,0.08); }
+    .code-block pre { padding:1.25rem 1.5rem;font-family:var(--mono);font-size:0.84rem;color:var(--text);overflow-x:auto;line-height:1.7; }
+    .c-green{color:#4ade80}.c-blue{color:#60a5fa}.c-purple{color:#c4b5fd}.c-yellow{color:#fbbf24}.c-dim{color:#3d5068}
+    .note { background:rgba(244,63,94,0.06);border:1px solid rgba(244,63,94,0.2);border-radius:10px;padding:1rem 1.25rem;margin:1.25rem 0;font-size:0.9rem; }
+    .note strong { color:#f87171; }
+    .note-info { background:rgba(59,130,246,0.06);border-color:rgba(59,130,246,0.2); }
+    .note-info strong { color:var(--accent-lt); }
+    .tool-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-top:1rem; }
+    .tool-card { background:var(--bg2);padding:1rem;transition:background 0.2s; }
+    .tool-card:hover { background:var(--bg3); }
+    .tool-card .tool-name { font-family:var(--mono);font-size:0.8rem;color:var(--accent-lt);font-weight:500;margin-bottom:0.3rem; }
+    .tool-card p { font-size:0.82rem;color:var(--text2);margin:0; }
+    .breadcrumb { display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text3);margin-bottom:2rem;margin-top:2rem; }
+    .breadcrumb a { color:var(--text3); }
+    .breadcrumb a:hover { color:var(--text2); }
+    @media (max-width:768px) { .nav-links { display:none; } }
   </style>
 </head>
 <body>
-<nav>
-  <div class="nav-logo"><span>//</span> orbit &mdash; <a href="../index.html" style="color:var(--text2)">docs</a></div>
-  <a href="https://github.com/KenyanRedwoods01/Orbit" target="_blank" style="color:var(--text2);font-size:0.9rem;"><i class="fab fa-github"></i> GitHub</a>
-</nav>
+<div class="nav-outer">
+  <nav>
+    <div class="nav-logo"><span class="slash">//</span><span class="orbit">orbit</span></div>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="installation.html">Install</a>
+      <a href="configuration.html">Config</a>
+      <a href="api-reference.html">API</a>
+      <a href="mcp.html" class="active">MCP</a>
+      <a href="github-actions.html">CI/CD</a>
+      <a href="security.html">Security</a>
+    </div>
+    <a class="btn-gh" href="https://github.com/KenyanRedwoods01/Orbit" target="_blank"><i class="fab fa-github"></i> GitHub</a>
+  </nav>
+</div>
 <div class="main">
-  <h1>MCP Integration</h1>
+  <div class="breadcrumb"><a href="index.html">Home</a><span>›</span><span>MCP Integration</span></div>
+  <h1 class="page-title">MCP Integration</h1>
   <p class="lead">Orbit ships a built-in Model Context Protocol (MCP) server, letting AI assistants like Claude interact with your server through a secure, structured interface.</p>
 
   <h2>Enable MCP</h2>
   <div class="code-block">
-    <div class="code-block-header">/etc/orbit/orbit.toml</div>
+    <div class="code-block-header">
+      <span>/etc/orbit/orbit.toml</span>
+      <button class="copy-btn" onclick="copyBlock(this)">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Copy
+      </button>
+    </div>
     <pre><span class="c-purple">[mcp]</span>
 <span class="c-blue">enabled</span>     = <span class="c-yellow">true</span>
 <span class="c-blue">socket_path</span> = <span class="c-green">"/run/orbit/mcp.sock"</span>
@@ -59,12 +106,18 @@
 
   <h2>Connect Claude Desktop (Unix socket)</h2>
   <div class="code-block">
-    <div class="code-block-header">claude_desktop_config.json</div>
+    <div class="code-block-header">
+      <span>claude_desktop_config.json</span>
+      <button class="copy-btn" onclick="copyBlock(this)">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Copy
+      </button>
+    </div>
     <pre>{
-  "mcpServers": {
-    "orbit": {
-      "command": "socat",
-      "args": ["STDIO", "UNIX-CONNECT:/run/orbit/mcp.sock"]
+  <span class="c-blue">"mcpServers"</span>: {
+    <span class="c-blue">"orbit"</span>: {
+      <span class="c-blue">"command"</span>: <span class="c-green">"socat"</span>,
+      <span class="c-blue">"args"</span>: [<span class="c-green">"STDIO"</span>, <span class="c-green">"UNIX-CONNECT:/run/orbit/mcp.sock"</span>]
     }
   }
 }</pre>
@@ -72,12 +125,18 @@
 
   <h2>Connect via TCP (remote agent)</h2>
   <div class="code-block">
-    <div class="code-block-header">claude_desktop_config.json</div>
+    <div class="code-block-header">
+      <span>claude_desktop_config.json</span>
+      <button class="copy-btn" onclick="copyBlock(this)">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Copy
+      </button>
+    </div>
     <pre>{
-  "mcpServers": {
-    "orbit-remote": {
-      "command": "socat",
-      "args": ["STDIO", "TCP:your-server-ip:5001"]
+  <span class="c-blue">"mcpServers"</span>: {
+    <span class="c-blue">"orbit-remote"</span>: {
+      <span class="c-blue">"command"</span>: <span class="c-green">"socat"</span>,
+      <span class="c-blue">"args"</span>: [<span class="c-green">"STDIO"</span>, <span class="c-green">"TCP:your-server-ip:5001"</span>]
     }
   }
 }</pre>
@@ -88,18 +147,29 @@
   </div>
 
   <h2>Available MCP tools</h2>
-  <ul>
-    <li><strong>get_metrics</strong> &mdash; CPU, memory, disk, and network statistics</li>
-    <li><strong>list_services</strong> &mdash; Running systemd services and their status</li>
-    <li><strong>list_containers</strong> &mdash; Docker containers</li>
-    <li><strong>get_logs</strong> &mdash; Recent journal or file log entries</li>
-    <li><strong>list_processes</strong> &mdash; Running processes with resource usage</li>
-    <li><strong>list_ports</strong> &mdash; Open network ports</li>
-    <li><strong>firewall_rules</strong> &mdash; Active firewall rules (read-only)</li>
-  </ul>
+  <div class="tool-grid">
+    <div class="tool-card"><div class="tool-name">get_metrics</div><p>CPU, memory, disk, and network statistics</p></div>
+    <div class="tool-card"><div class="tool-name">list_services</div><p>Running systemd services and their status</p></div>
+    <div class="tool-card"><div class="tool-name">list_containers</div><p>Docker containers with state and stats</p></div>
+    <div class="tool-card"><div class="tool-name">get_logs</div><p>Recent journal or file log entries</p></div>
+    <div class="tool-card"><div class="tool-name">list_processes</div><p>Running processes with resource usage</p></div>
+    <div class="tool-card"><div class="tool-name">list_ports</div><p>Open network ports and listeners</p></div>
+    <div class="tool-card"><div class="tool-name">firewall_rules</div><p>Active firewall rules (read-only)</p></div>
+  </div>
 
   <h2>Full MCP documentation</h2>
   <p>See <a href="https://github.com/KenyanRedwoods01/Orbit/blob/main/docs/MCP.md">docs/MCP.md</a> in the repository for the complete tool reference and schema definitions.</p>
 </div>
+<script>
+function copyBlock(btn) {
+  const pre = btn.closest('.code-block').querySelector('pre');
+  const text = pre ? pre.textContent : '';
+  navigator.clipboard.writeText(text).then(() => {
+    btn.classList.add('copied');
+    btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><polyline points="2,6 4.5,9 10,3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg> Copied!';
+    setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M2 8V2h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg> Copy'; }, 2000);
+  });
+}
+</script>
 </body>
 </html>
