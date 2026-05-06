@@ -1,7 +1,7 @@
 # Orbit VPS — Feature Status Report
 
 > Generated: 2026-05-03  
-> Stack: React 18 + TypeScript 5, Vite 5, Go backend (port 3900)  
+> Stack: React 18 + TypeScript 5, Vite 5, Go backend (port 5000)  
 > Total frontend lines of code surveyed: ~18 500 across 17 page areas
 
 ---
@@ -299,7 +299,7 @@
 | Theme / appearance toggle | ❌ | CSS vars defined but no toggle UI |
 | Notification preferences | ❌ | Not implemented |
 | API key management | ❌ | Not implemented |
-| Go backend status / health check | ❌ | Backend on port 3900 always returns ECONNREFUSED in dev |
+| Go backend status / health check | ❌ | Backend on port 5000 not yet wired to all frontend pages |
 | Timezone / locale settings | ❌ | Not implemented |
 | System update via UI | ❌ | Not implemented |
 
@@ -334,7 +334,7 @@
 
 ### High Impact / Low Effort
 1. **Settings page** — theme toggle, timezone, basic preferences
-2. **Go backend connectivity** — backend is unreachable in dev (ECONNREFUSED :3900); all pages fall back to mock data
+2. **Go backend connectivity** — backend is on port 5000; frontend pages still fall back to mock data
 3. **Global dashboard** — single overview page aggregating stats from all modules
 4. **Log export** — download button is rendered but action is not wired
 

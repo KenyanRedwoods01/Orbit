@@ -68,7 +68,7 @@ For production deployments:
 
 1. **Run behind a reverse proxy** (Nginx/Caddy) with rate limiting
 2. **Use TLS** with a valid certificate (Let's Encrypt recommended)
-3. **Restrict firewall access** — only expose port 3900 to trusted IPs
+3. **Restrict firewall access** — only expose port 5000 to trusted IPs
 4. **Enable Fail2ban** integration for automated SSH brute-force protection
 5. **Rotate MCP tokens** regularly using the token management UI
 6. **Run as a non-root user** — the systemd service drops privileges after startup

@@ -15,7 +15,7 @@ import (
 
         "golang.org/x/crypto/ssh"
 
-        "github.com/orbit-sh/orbit/internal/collector"
+        "github.com/KenyanRedwoods01/Orbit/internal/collector"
         gopshost "github.com/shirou/gopsutil/v3/host"
 )
 

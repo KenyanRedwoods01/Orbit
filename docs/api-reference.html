@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API Reference — Orbit</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+      --text:#e6edf3;--text2:#8b949e;--accent:#58a6ff;--accent2:#3fb950;
+      --purple:#bc8cff;--yellow:#d29922;--red:#f78166;--radius:12px;
+      --mono:'JetBrains Mono',monospace;--sans:'Inter',system-ui,sans-serif;
+    }
+    body { font-family:var(--sans);background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased; }
+    a { color:var(--accent); }
+    nav { position:sticky;top:0;z-index:100;background:rgba(13,17,23,0.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 2rem;height:60px; }
+    .nav-logo { font-family:var(--mono);font-size:1.1rem;color:var(--text); }
+    .nav-logo span { color:var(--accent); }
+    .main { max-width:860px;margin:0 auto;padding:3rem 2rem 6rem; }
+    h1 { font-size:2rem;font-weight:700;margin-bottom:0.5rem; }
+    .lead { color:var(--text2);margin-bottom:2.5rem;font-size:1.05rem; }
+    h2 { font-size:1.3rem;font-weight:600;margin:2.5rem 0 0.75rem;padding-top:0.5rem;border-top:1px solid var(--border); }
+    p { color:var(--text2);margin-bottom:1rem; }
+    code { font-family:var(--mono);font-size:0.85em;background:var(--bg3);padding:0.15em 0.4em;border-radius:4px;color:var(--text); }
+    .endpoint { display:flex;align-items:center;gap:0.75rem;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:0.75rem 1rem;margin-bottom:0.75rem; }
+    .method { font-family:var(--mono);font-size:0.78rem;font-weight:700;padding:0.2rem 0.5rem;border-radius:4px;min-width:50px;text-align:center; }
+    .get  { background:rgba(63,185,80,0.15);color:var(--accent2); }
+    .post { background:rgba(88,166,255,0.15);color:var(--accent); }
+    .del  { background:rgba(247,129,102,0.15);color:var(--red); }
+    .path { font-family:var(--mono);font-size:0.88rem; }
+    .desc { font-size:0.85rem;color:var(--text2);margin-left:auto; }
+    .note { background:rgba(88,166,255,0.08);border:1px solid rgba(88,166,255,0.3);border-radius:8px;padding:1rem 1.25rem;margin:1.25rem 0;font-size:0.9rem; }
+    .note strong { color:var(--accent); }
+  </style>
+</head>
+<body>
+<nav>
+  <div class="nav-logo"><span>//</span> orbit &mdash; <a href="../index.html" style="color:var(--text2)">docs</a></div>
+  <a href="https://github.com/KenyanRedwoods01/Orbit" target="_blank" style="color:var(--text2);font-size:0.9rem;"><i class="fab fa-github"></i> GitHub</a>
+</nav>
+<div class="main">
+  <h1>API Reference</h1>
+  <p class="lead">Orbit exposes a REST API at <code>/api/v1</code> and WebSocket streams at <code>/ws</code>. The full OpenAPI spec is served at <code>https://your-server:5000/api/openapi.json</code>.</p>
+
+  <h2>Authentication</h2>
+  <p>All endpoints require a JWT in the <code>Authorization: Bearer &lt;token&gt;</code> header. Obtain a token by posting credentials to <code>/api/v1/auth/login</code>.</p>
+  <div class="note"><strong><i class="fas fa-shield-alt"></i> Tip:</strong> You can import the OpenAPI spec at <code>/api/openapi.json</code> directly into Postman or Insomnia for an interactive client.</div>
+
+  <h2>System info</h2>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/api/v1/sysinfo</span><span class="desc">Host OS, kernel, uptime</span></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/api/v1/metrics</span><span class="desc">Current CPU / memory / disk snapshot</span></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/ws/metrics</span><span class="desc"><i class="fas fa-bolt" style="color:#58a6ff;font-size:0.75rem;"></i> WebSocket &mdash; live metric stream</span></div>
+
+  <h2>Processes</h2>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/api/v1/processes</span><span class="desc">List running processes</span></div>
+  <div class="endpoint"><span class="method del">DEL</span><span class="path">/api/v1/processes/{pid}</span><span class="desc">Kill a process</span></div>
+
+  <h2>Services (systemd)</h2>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/api/v1/services</span><span class="desc">List systemd units</span></div>
+  <div class="endpoint"><span class="method post">POST</span><span class="path">/api/v1/services/{name}/start</span><span class="desc">Start a service</span></div>
+  <div class="endpoint"><span class="method post">POST</span><span class="path">/api/v1/services/{name}/stop</span><span class="desc">Stop a service</span></div>
+  <div class="endpoint"><span class="method post">POST</span><span class="path">/api/v1/services/{name}/restart</span><span class="desc">Restart a service</span></div>
+
+  <h2>Containers (Docker)</h2>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/api/v1/containers</span><span class="desc">List all containers</span></div>
+  <div class="endpoint"><span class="method post">POST</span><span class="path">/api/v1/containers</span><span class="desc">Create a container</span></div>
+  <div class="endpoint"><span class="method post">POST</span><span class="path">/api/v1/containers/{id}/start</span><span class="desc">Start container</span></div>
+  <div class="endpoint"><span class="method post">POST</span><span class="path">/api/v1/containers/{id}/stop</span><span class="desc">Stop container</span></div>
+  <div class="endpoint"><span class="method del">DEL</span><span class="path">/api/v1/containers/{id}</span><span class="desc">Remove container</span></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/ws/containers/{id}/logs</span><span class="desc"><i class="fas fa-bolt" style="color:#58a6ff;font-size:0.75rem;"></i> WebSocket &mdash; live container logs</span></div>
+
+  <h2>Firewall</h2>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/api/v1/firewall/rules</span><span class="desc">List firewall rules</span></div>
+  <div class="endpoint"><span class="method post">POST</span><span class="path">/api/v1/firewall/rules</span><span class="desc">Add a rule</span></div>
+  <div class="endpoint"><span class="method del">DEL</span><span class="path">/api/v1/firewall/rules/{id}</span><span class="desc">Remove a rule</span></div>
+
+  <h2>Deployments</h2>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/api/v1/pipelines</span><span class="desc">List pipelines</span></div>
+  <div class="endpoint"><span class="method post">POST</span><span class="path">/api/v1/pipelines/{id}/trigger</span><span class="desc">Trigger a deployment</span></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/ws/deploy/{id}/logs</span><span class="desc"><i class="fas fa-bolt" style="color:#58a6ff;font-size:0.75rem;"></i> WebSocket &mdash; live deploy logs</span></div>
+
+  <h2>Full OpenAPI spec</h2>
+  <p>The machine-readable OpenAPI 3.0 specification is served at runtime:</p>
+  <code>GET https://your-server:5000/api/openapi.json</code>
+</div>
+</body>
+</html>

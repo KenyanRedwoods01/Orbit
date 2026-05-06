@@ -1,13 +1,13 @@
-# Orbit VPS
+# Orbit
 
 > The server management layer every other tool skips.
 
 Orbit is a **single binary** that gives you real OS visibility, deploy pipelines, web-server config, log streaming, firewall, uptime monitoring, and an MCP socket for AI agents — all in one tool, with no account required.
 
-```
-curl -fsSL https://get.orbit.sh | bash
+```bash
+curl -fsSL https://raw.githubusercontent.com/KenyanRedwoods01/Orbit/main/scripts/install.sh | sudo bash
 systemctl enable --now orbit
-# Open https://your-server-ip:3900
+# Open https://your-server-ip:5000
 ```
 
 ---
@@ -33,58 +33,58 @@ Orbit fills every gap. One binary, one port, no agents.
 
 | Module | What it does |
 |---|---|
-| 📊 Real-time metrics | CPU, memory, disk I/O, network — live graphs, per-process breakdown |
-| ⚙️ Service manager | systemd + PM2 + Docker — start, stop, restart, edit unit files |
-| 📄 Log streaming | Tail any file or journald unit with real-time search |
-| 🔒 Firewall | UFW / nftables visual rule editor — no more `ufw allow` in the dark |
-| 🌐 Nginx / Caddy config | Virtual-host editor, auto-SSL, config validation |
-| 🚀 Deploy hooks | Webhook-triggered pipelines, zero-downtime blue/green, rollback |
-| 🗄️ Database monitor | MySQL, Postgres, Redis — connection stats, slow queries |
-| 📈 Uptime monitors | HTTP / TCP / ping checks with alert channels |
-| 🛡️ Security audit | SSH hardening, CVE scan, Fail2ban, hardening score |
-| 🤖 MCP for AI agents | Scoped MCP socket — let Claude query metrics and trigger deploys |
-| 🖥️ Multi-server hub | Manage N servers from one Orbit instance |
-| 📦 Containers | Docker status, logs, resource usage — not orchestration, just visibility |
+| Real-time metrics | CPU, memory, disk I/O, network — live graphs, per-process breakdown |
+| Service manager | systemd + PM2 + Docker — start, stop, restart, edit unit files |
+| Log streaming | Tail any file or journald unit with real-time search |
+| Firewall | UFW / nftables visual rule editor |
+| Nginx / Caddy config | Virtual-host editor, auto-SSL, config validation |
+| Deploy hooks | Webhook-triggered pipelines, zero-downtime blue/green, rollback |
+| Database monitor | MySQL, Postgres, Redis — connection stats, slow queries |
+| Uptime monitors | HTTP / TCP / ping checks with alert channels |
+| Security audit | SSH hardening, CVE scan, Fail2ban, hardening score |
+| MCP for AI agents | Scoped MCP socket — let Claude query metrics and trigger deploys |
+| Multi-server hub | Manage N servers from one Orbit instance |
+| Containers | Docker status, logs, resource usage |
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│                  orbit binary                    │
-│                                                  │
-│  ┌───────────┐  ┌──────────┐  ┌──────────────┐  │
-│  │ React SPA │  │ Go HTTP/2│  │  MCP server  │  │
-│  │ (embedded)│  │  server  │  │  (Unix sock) │  │
-│  └───────────┘  └────┬─────┘  └──────────────┘  │
-│                      │                           │
-│  ┌────────────────────▼──────────────────────┐  │
-│  │              Module registry               │  │
-│  │  metrics · services · logs · firewall      │  │
-│  │  webserver · deploy · uptime · security    │  │
-│  │  containers · multiserver · database       │  │
-│  └────────────────────┬──────────────────────┘  │
-│                       │                          │
-│  ┌────────────────────▼──────────────────────┐  │
-│  │            OS integration layer            │  │
-│  │  /proc · journald · systemd DBus           │  │
-│  │  Docker socket · nftables · Nginx/Caddy    │  │
-│  └───────────────────────────────────────────┘  │
-│                                                  │
-│  ┌──────────────┐  ┌──────────────┐             │
-│  │  SQLite      │  │  BoltDB      │             │
-│  │  (relational)│  │  (metric     │             │
-│  │              │  │   ring 24h)  │             │
-│  └──────────────┘  └──────────────┘             │
-└─────────────────────────────────────────────────┘
++--------------------------------------------------+
+|                  orbit binary                    |
+|                                                  |
+|  +-----------+  +----------+  +--------------+  |
+|  | React SPA |  | Go HTTP/2|  |  MCP server  |  |
+|  | (embedded)|  |  server  |  |  (Unix sock) |  |
+|  +-----------+  +----+-----+  +--------------+  |
+|                      |                           |
+|  +-------------------------------------------+  |
+|  |              Module registry              |  |
+|  |  metrics . services . logs . firewall     |  |
+|  |  webserver . deploy . uptime . security   |  |
+|  |  containers . multiserver . database      |  |
+|  +-------------------------------------------+  |
+|                      |                           |
+|  +-------------------------------------------+  |
+|  |            OS integration layer           |  |
+|  |  /proc . journald . systemd DBus          |  |
+|  |  Docker socket . nftables . Nginx         |  |
+|  +-------------------------------------------+  |
+|                                                  |
+|  +--------------+  +--------------+             |
+|  |  SQLite      |  |  BoltDB      |             |
+|  |  (relational)|  |  (metric     |             |
+|  |              |  |   ring 24h)  |             |
+|  +--------------+  +--------------+             |
++--------------------------------------------------+
 ```
 
 **Build pipeline:**
 ```
-React + Vite  →  dist/  →  go:embed  →  orbit binary
-goreleaser    →  linux/amd64 + arm64 + armv7
-GitHub Actions → tag push → goreleaser → GitHub Releases + apt/rpm repo
+React + Vite  ->  dist/  ->  go:embed  ->  orbit binary
+goreleaser    ->  linux/amd64 + arm64 + armv7
+GitHub Actions -> tag push -> goreleaser -> GitHub Releases + .deb/.rpm
 ```
 
 **Binary footprint:**
@@ -92,34 +92,28 @@ GitHub Actions → tag push → goreleaser → GitHub Releases + apt/rpm repo
 - RAM idle: ~30 MB
 - RAM under load: ~80 MB
 - Startup time: < 100 ms
-- CGO: disabled (except SQLite)
-- Runtime deps: none (SQLite embedded, no external DB, no web server)
+- CGO: enabled (SQLite only)
+- Runtime deps: none
 
 ---
 
 ## Tech stack
 
 ### Backend (Go 1.22)
-- `net/http` + HTTP/2 — no framework
+- `net/http` + HTTP/2
 - `gorilla/websocket` — live metric/log streams
 - `shirou/gopsutil/v3` — /proc abstraction
-- `coreos/go-systemd` — systemd DBus bindings
-- `moby/moby/client` — Docker socket API
-- `mattn/go-sqlite3` — embedded relational store
+- `mattn/go-sqlite3` — embedded relational store (CGO)
 - `etcd-io/bbolt` — BoltDB metric ring buffer
-- `golang-jwt/jwt/v5` — session tokens (httpOnly cookies)
-- `pquerna/otp` — TOTP 2FA
-- `mark3labs/mcp-go` — MCP server implementation
-- `google/nftables` + `hpcloud/tail` — firewall + log tail
-- `goreleaser` + `nfpm` — packaging
+- `golang-jwt/jwt/v5` — session tokens
+- `golang.org/x/crypto` — password hashing + bcrypt
 
 ### Frontend (React 18 + Vite 5 + TypeScript)
-- `@tanstack/react-query` — data fetching + caching
+- `@tanstack/react-query` — data fetching
 - `recharts` — time-series charts
 - `zustand` — global state
-- `xterm.js` — terminal for log streaming
-- `react-router-dom` v6 — client routing
-- `@monaco-editor/react` — Nginx/unit file editing
+- `xterm.js` — terminal / log streaming
+- `react-router-dom` v6
 
 ---
 
@@ -127,26 +121,51 @@ GitHub Actions → tag push → goreleaser → GitHub Releases + apt/rpm repo
 
 ### Quick install (recommended)
 ```bash
-curl -fsSL https://get.orbit.sh | bash
-systemctl enable --now orbit
+curl -fsSL https://raw.githubusercontent.com/KenyanRedwoods01/Orbit/main/scripts/install.sh | sudo bash
 ```
 
-### Behind Nginx (production)
+### With options
 ```bash
-orbit nginx-config | sudo tee /etc/nginx/sites-available/orbit
-sudo nginx -s reload
+# Custom port (must be in range 5000-6000)
+sudo ORBIT_PORT=5100 bash install.sh
+
+# Specific version
+sudo bash install.sh --version v1.0.0 --port 5000
+
+# Install without starting the service
+sudo bash install.sh --no-start
+
+# Uninstall
+sudo bash install.sh --uninstall
 ```
 
-### Enable MCP for AI agents
+### Docker (build from source)
+
+> Docker images are built from source — no pre-built image on a registry yet.
+
 ```bash
-orbit mcp enable --scope read-only   # Read-only scope
-orbit mcp enable --scope deploy      # Allow deploy triggers
-orbit mcp enable --scope admin       # Full access (use carefully)
+git clone https://github.com/KenyanRedwoods01/Orbit.git
+cd Orbit
+cp .env.example .env          # set ORBIT_SECRET_KEY
+docker compose up -d          # builds image then starts on port 5000
 ```
 
-### Add remote servers
+Or build and run manually:
 ```bash
-orbit server add user@192.168.1.10
+docker build -t orbit .
+docker run -d \
+  --name orbit \
+  --cap-add NET_ADMIN --cap-add SYS_PTRACE \
+  -p 5000:5000 \
+  -v orbit-data:/var/lib/orbit \
+  orbit
+```
+
+### Clone and install
+```bash
+git clone https://github.com/KenyanRedwoods01/Orbit.git
+cd Orbit
+sudo bash scripts/install.sh
 ```
 
 ---
@@ -156,30 +175,90 @@ orbit server add user@192.168.1.10
 Config file: `/etc/orbit/orbit.toml`
 
 ```toml
-listen_addr = "0.0.0.0:3900"
+# Port must be in range 5000-6000
+listen_addr = "0.0.0.0:5000"
 data_dir    = "/var/lib/orbit"
 
-# TLS — defaults to self-signed, or BYO
+# TLS -- defaults to self-signed, or bring your own
 # tls_cert_file = "/etc/orbit/tls.crt"
 # tls_key_file  = "/etc/orbit/tls.key"
 
 [modules]
-metrics     = true
-services    = true
-logs        = true
-firewall    = true
-web_server  = true
-deploy      = true
-database    = true
-uptime      = true
-security    = true
+metrics      = true
+services     = true
+logs         = true
+firewall     = true
+web_server   = true
+deploy       = true
+database     = true
+uptime       = true
+security     = true
 multi_server = true
-containers  = true
+containers   = true
 
 [mcp]
 enabled     = false
 socket_path = "/run/orbit/mcp.sock"
-# tcp_addr  = "127.0.0.1:3901"   # Uncomment for remote MCP
+# tcp_addr  = "127.0.0.1:5001"   # Uncomment for remote MCP (port 5000-6000)
+```
+
+---
+
+## Port reference
+
+All Orbit services use ports in the range **5000–6000**:
+
+| Port | Service | Notes |
+|---|---|---|
+| 5000 | Main panel (HTTPS) | Default, configurable |
+| 5001 | MCP TCP listener | Optional, disabled by default |
+| 5002 | Prometheus metrics | Optional, disabled by default |
+
+---
+
+## Development
+
+### Prerequisites
+- Go 1.22+
+- Node 20+
+- gcc (for CGO / sqlite3)
+- `goreleaser` (optional, for releases)
+
+### Run locally
+```bash
+# 1. Build the frontend
+cd web && npm install && npm run build && cd ..
+
+# 2. Run the Go daemon
+go run ./cmd/orbit --config ./orbit.example.toml
+
+# 3. (Optional) Run frontend in dev mode with hot-reload
+cd web && npm run dev
+```
+
+### Makefile commands
+```bash
+make build             # build frontend + Go binary -> dist/orbit
+make test              # run Go tests with race detection
+make lint              # run golangci-lint
+make web-dev           # Vite dev server
+make docker-build      # build Docker image from source
+make release-snapshot  # local GoReleaser snapshot
+```
+
+### Release process
+```bash
+# Tag a version -- triggers the release GitHub Actions workflow
+git tag v1.0.0
+git push origin v1.0.0
+
+# GoReleaser produces:
+#   orbit_linux_amd64.tar.gz
+#   orbit_linux_arm64.tar.gz
+#   orbit_1.0.0_amd64.deb
+#   orbit_1.0.0_x86_64.rpm
+#   ghcr.io/kenyanredwoods01/orbit:v1.0.0
+#   checksums.txt
 ```
 
 ---
@@ -193,91 +272,26 @@ socket_path = "/run/orbit/mcp.sock"
 - UFW firewall rule editor
 - Nginx vhost config editor
 - SSH-key + password auth
-- Single-server only, embedded React UI
 
-### v0.2 — Deploy & monitor (Next)
+### v0.2 — Deploy and monitor (Next)
 - Webhook deploy hooks
-- Git-pull + script exec
 - Zero-downtime blue/green swap
 - Uptime monitors (HTTP/TCP/ping)
-- SSL cert expiry alerts
-- Docker container view
+- Docker container management
 - Email + Slack notifications
 
-### v0.3 — Multi-server & MCP (Later)
+### v0.3 — Multi-server and MCP (Later)
 - SSH jump-host multi-server
 - MCP server socket
 - Fleet metrics overview
 - Agent audit log
-- Public status page generator
 
-### v0.4 — Security & AI (Later)
+### v0.4 — Security and AI (Later)
 - SSH hardening audit
 - CVE scoring for open ports
 - Fail2ban integration
 - MCP admin scope
-- DB slow-query monitor
 - TOTP / 2FA, OIDC / SSO
-
----
-
-## Development
-
-### Prerequisites
-- Go 1.22+
-- Node 20+
-- `goreleaser` (optional, for releases)
-
-### Run locally
-```bash
-# 1. Build the frontend
-cd web && npm install && npm run build && cd ..
-
-# 2. Run the Go daemon
-go run ./cmd/orbit --config ./dev.toml
-
-# 3. (Optional) Run frontend in dev mode with hot-reload
-cd web && npm run dev
-```
-
-### Project structure
-```
-orbit/
-├── cmd/orbit/          # Entry point
-├── internal/
-│   ├── api/            # HTTP/2 server, routes, middleware
-│   ├── auth/           # JWT, bcrypt, TOTP
-│   ├── collector/      # OS metric collection
-│   ├── config/         # orbit.toml loading
-│   ├── db/             # SQLite + BoltDB init and schema
-│   ├── mcp/            # MCP server
-│   ├── modules/        # One package per feature module
-│   │   ├── metrics/
-│   │   ├── services/
-│   │   ├── logs/
-│   │   ├── firewall/
-│   │   ├── webserver/
-│   │   ├── deploy/
-│   │   ├── database/
-│   │   ├── uptime/
-│   │   ├── security/
-│   │   ├── multiserver/
-│   │   └── containers/
-│   ├── plugin/         # Plugin interface
-│   └── transport/      # WebSocket hub
-├── web/                # React + Vite frontend
-│   └── src/
-│       ├── components/ # Shared UI components
-│       ├── hooks/      # Custom React hooks
-│       ├── lib/        # API client
-│       ├── pages/      # One directory per module
-│       ├── store/      # Zustand stores
-│       └── types/      # Shared TypeScript types
-├── scripts/            # install.sh, nginx snippet
-├── packaging/          # goreleaser + nfpm config
-├── docs/               # Extended documentation
-└── .github/workflows/  # CI / CD pipelines
-```
 
 ---
 
@@ -296,9 +310,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor guide.
 
 ## Repository
 
-Source code and issue tracker: **https://github.com/KenyanRedwoods01/Orbit**
+Source code: **https://github.com/KenyanRedwoods01/Orbit**
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute, branch conventions, PR checklist
-- [SECURITY.md](SECURITY.md) — responsible disclosure policy
-- [PROJECT_SCOPE.md](PROJECT_SCOPE.md) — what Orbit will and will not do
-- [ISSUES.md](ISSUES.md) — issue labels, triage process, and bug report templates
+- [docs/](docs/) — full documentation and GitHub Pages showcase site
+- [docs/installation.html](docs/installation.html) — step-by-step install guide
+- [docs/configuration.html](docs/configuration.html) — full orbit.toml reference

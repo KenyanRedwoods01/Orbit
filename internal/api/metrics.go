@@ -11,8 +11,8 @@ import (
 	"github.com/gorilla/websocket"
 	bolt "go.etcd.io/bbolt"
 
-	"github.com/orbit-sh/orbit/internal/collector"
-	"github.com/orbit-sh/orbit/internal/db"
+	"github.com/KenyanRedwoods01/Orbit/internal/collector"
+	"github.com/KenyanRedwoods01/Orbit/internal/db"
 )
 
 var wsUpgrader = websocket.Upgrader{

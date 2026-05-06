@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/orbit-sh/orbit/internal/config"
-	"github.com/orbit-sh/orbit/internal/db"
+	"github.com/KenyanRedwoods01/Orbit/internal/config"
+	"github.com/KenyanRedwoods01/Orbit/internal/db"
 )
 
 // Server wraps the MCP server.

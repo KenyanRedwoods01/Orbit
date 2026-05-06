@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Security Guide — Orbit</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+      --text:#e6edf3;--text2:#8b949e;--accent:#58a6ff;--accent2:#3fb950;
+      --red:#f78166;--radius:12px;
+      --mono:'JetBrains Mono',monospace;--sans:'Inter',system-ui,sans-serif;
+    }
+    body { font-family:var(--sans);background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased; }
+    a { color:var(--accent); }
+    nav { position:sticky;top:0;z-index:100;background:rgba(13,17,23,0.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 2rem;height:60px; }
+    .nav-logo { font-family:var(--mono);font-size:1.1rem;color:var(--text); }
+    .nav-logo span { color:var(--accent); }
+    .main { max-width:800px;margin:0 auto;padding:3rem 2rem 6rem; }
+    h1 { font-size:2rem;font-weight:700;margin-bottom:0.5rem; }
+    .lead { color:var(--text2);margin-bottom:2.5rem;font-size:1.05rem; }
+    h2 { font-size:1.3rem;font-weight:600;margin:2.5rem 0 0.75rem;padding-top:0.5rem;border-top:1px solid var(--border); }
+    p { color:var(--text2);margin-bottom:1rem; }
+    code { font-family:var(--mono);font-size:0.85em;background:var(--bg3);padding:0.15em 0.4em;border-radius:4px;color:var(--text); }
+    ul { padding-left:1.5rem;color:var(--text2);margin-bottom:1rem; }
+    li { margin-bottom:0.5rem; }
+    .check { color:var(--accent2); margin-right:0.4rem; }
+    .note { background:rgba(247,129,102,0.08);border:1px solid rgba(247,129,102,0.3);border-radius:8px;padding:1rem 1.25rem;margin:1.25rem 0;font-size:0.9rem; }
+    .note strong { color:var(--red); }
+    .module-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem;margin-top:1rem; }
+    .module-card { background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem; }
+    .module-card h4 { font-size:0.9rem;font-weight:600;margin-bottom:0.25rem; }
+    .module-card p { font-size:0.82rem;color:var(--text2);margin:0; }
+    .module-icon { color:var(--accent);margin-right:0.4rem; }
+  </style>
+</head>
+<body>
+<nav>
+  <div class="nav-logo"><span>//</span> orbit &mdash; <a href="../index.html" style="color:var(--text2)">docs</a></div>
+  <a href="https://github.com/KenyanRedwoods01/Orbit" target="_blank" style="color:var(--text2);font-size:0.9rem;"><i class="fab fa-github"></i> GitHub</a>
+</nav>
+<div class="main">
+  <h1>Security Guide</h1>
+  <p class="lead">Orbit is designed to be security-first. This guide covers the capability model, hardening checklist, and integrated security tools.</p>
+
+  <h2>Capability model</h2>
+  <p>Orbit runs as a dedicated <code>orbit</code> system user with only two Linux capabilities:</p>
+  <ul>
+    <li><strong>CAP_NET_ADMIN</strong> &mdash; required for reading and writing firewall rules via nftables/iptables</li>
+    <li><strong>CAP_SYS_PTRACE</strong> &mdash; required for accurate per-process statistics via <code>/proc/&lt;pid&gt;/maps</code></li>
+  </ul>
+  <p>All other capabilities are dropped. <code>NoNewPrivileges=yes</code> prevents privilege escalation. <code>ProtectSystem=strict</code> makes the OS read-only except for explicitly listed paths.</p>
+
+  <h2>Hardening checklist</h2>
+  <ul>
+    <li><i class="fas fa-check check"></i>Run behind a reverse proxy (Nginx) &mdash; never expose Orbit directly on port 80/443</li>
+    <li><i class="fas fa-check check"></i>Replace the auto-generated self-signed cert with a valid TLS certificate in production</li>
+    <li><i class="fas fa-check check"></i>Set a strong <code>secret_key</code> in <code>orbit.toml</code> (32+ random bytes)</li>
+    <li><i class="fas fa-check check"></i>Restrict panel access to a VPN or trusted IP range via firewall rules</li>
+    <li><i class="fas fa-check check"></i>Enable TOTP two-factor authentication in the panel Settings</li>
+    <li><i class="fas fa-check check"></i>Review the audit log regularly (Security &rarr; Audit Log)</li>
+    <li><i class="fas fa-check check"></i>Keep Orbit updated &mdash; run <code>bash scripts/install.sh --version latest</code></li>
+    <li><i class="fas fa-check check"></i>Enable CrowdSec for community threat intelligence</li>
+  </ul>
+
+  <div class="note">
+    <strong><i class="fas fa-exclamation-triangle"></i> Port exposure:</strong> All Orbit ports must be in the range 5000&ndash;6000. Do not expose these ports to the public internet without a firewall rule restricting access to trusted IPs.
+  </div>
+
+  <h2>Integrated security modules</h2>
+  <div class="module-grid">
+    <div class="module-card">
+      <h4><i class="fas fa-shield-alt module-icon"></i>Wazuh</h4>
+      <p>SIEM and host-based intrusion detection. Managed from Security &rarr; Wazuh.</p>
+    </div>
+    <div class="module-card">
+      <h4><i class="fas fa-network-wired module-icon"></i>Suricata</h4>
+      <p>Network intrusion detection system. Managed from Security &rarr; Suricata.</p>
+    </div>
+    <div class="module-card">
+      <h4><i class="fas fa-users module-icon"></i>CrowdSec</h4>
+      <p>Community-driven threat intelligence and IP blocking.</p>
+    </div>
+    <div class="module-card">
+      <h4><i class="fas fa-ban module-icon"></i>Fail2ban</h4>
+      <p>Automatic IP banning for brute-force attempts.</p>
+    </div>
+  </div>
+
+  <h2>Reporting a vulnerability</h2>
+  <p>Please report security issues privately via GitHub's <a href="https://github.com/KenyanRedwoods01/Orbit/security/advisories/new">Security Advisories</a> page. Do not file public issues for security vulnerabilities.</p>
+</div>
+</body>
+</html>

@@ -4,20 +4,23 @@ Thanks for wanting to help! Here's how to get started.
 
 ## Development setup
 
-**Prerequisites:** Go 1.22+, Node 20+
+**Prerequisites:** Go 1.22+, Node 20+, gcc (for CGO/sqlite3)
 
 ```bash
-git clone https://github.com/orbit-sh/orbit
-cd orbit
+git clone https://github.com/KenyanRedwoods01/Orbit.git
+cd Orbit
 
-# Frontend (watch mode)
+# Install frontend dependencies and start in watch mode
 cd web && npm install && npm run dev &
 
-# Backend (builds and serves on :3900)
+# Build frontend once (required for first run)
+cd web && npm run build && cd ..
+
+# Run backend (serves panel on port 5000)
 go run ./cmd/orbit --config orbit.example.toml
 ```
 
-The Vite dev server runs on port 5173 and proxies `/api` and `/ws` to the Go daemon.
+The Vite dev server runs on port 5173 and proxies `/api` and `/ws` to the Go daemon on port 5000.
 
 ## Before opening a PR
 

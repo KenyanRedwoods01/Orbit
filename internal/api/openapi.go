@@ -39,7 +39,7 @@ var orbitOpenAPISchema = map[string]interface{}{
 		"title":       "Orbit VPS Management API",
 		"description": "Enterprise server management panel REST API",
 		"version":     "1.0.0",
-		"contact":     map[string]string{"name": "Orbit VPS", "url": "https://github.com/orbit-sh/orbit"},
+		"contact":     map[string]string{"name": "Orbit VPS", "url": "https://github.com/KenyanRedwoods01/Orbit"},
 	},
 	"servers": []map[string]string{
 		{"url": "/", "description": "Current server"},

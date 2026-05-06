@@ -9,9 +9,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/orbit-sh/orbit/internal/api"
-	"github.com/orbit-sh/orbit/internal/config"
-	"github.com/orbit-sh/orbit/internal/db"
+	"github.com/KenyanRedwoods01/Orbit/internal/api"
+	"github.com/KenyanRedwoods01/Orbit/internal/config"
+	"github.com/KenyanRedwoods01/Orbit/internal/db"
 )
 
 var version = "dev"

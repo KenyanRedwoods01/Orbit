@@ -9,7 +9,7 @@ import (
         "strconv"
         "time"
 
-        "github.com/orbit-sh/orbit/internal/collector"
+        "github.com/KenyanRedwoods01/Orbit/internal/collector"
 )
 
 type alertRule struct {
