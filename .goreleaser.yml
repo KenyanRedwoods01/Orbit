@@ -1,0 +1,83 @@
+# .goreleaser.yml
+project_name: orbit
+version: 2
+
+before:
+  hooks:
+    # Build the React frontend and embed it into internal/api/static
+    - bash -c "cd web && npm ci && npm run build"
+
+builds:
+  - id: orbit
+    main: ./cmd/orbit
+    binary: orbit
+    env:
+      - CGO_ENABLED=1   # needed for mattn/go-sqlite3
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - "7"
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+
+archives:
+  - id: orbit
+    name_template: "orbit_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    format: tar.gz
+    files:
+      - README.md
+      - LICENSE
+      - orbit.example.toml
+      - scripts/install.sh
+
+checksum:
+  name_template: "checksums.txt"
+
+nfpms:
+  - id: packages
+    package_name: orbit
+    vendor: Orbit VPS
+    homepage: https://orbit.sh
+    maintainer: Orbit VPS <hello@orbit.sh>
+    description: "Single-binary VPS management panel — metrics, deploy, firewall, MCP."
+    license: AGPL-3.0
+    formats:
+      - deb
+      - rpm
+    contents:
+      - src: orbit.example.toml
+        dst: /etc/orbit/orbit.toml
+        type: config|noreplace
+      - src: packaging/orbit.service
+        dst: /etc/systemd/system/orbit.service
+    scripts:
+      postinstall: "packaging/postinstall.sh"
+      preremove:   "packaging/preremove.sh"
+
+dockers:
+  - image_templates:
+      - "ghcr.io/orbit-sh/orbit:{{ .Tag }}"
+      - "ghcr.io/orbit-sh/orbit:latest"
+    dockerfile: packaging/Dockerfile
+    build_flag_templates:
+      - "--platform=linux/amd64"
+
+release:
+  github:
+    owner: orbit-sh
+    name: orbit
+  draft: false
+  prerelease: auto
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"

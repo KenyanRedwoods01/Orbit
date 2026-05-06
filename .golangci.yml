@@ -1,0 +1,19 @@
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosec
+    - gofmt
+    - misspell
+
+linters-settings:
+  gosec:
+    excludes:
+      - G304  # File path provided as taint input — acceptable in config loading

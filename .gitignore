@@ -1,0 +1,30 @@
+# Go
+/orbit
+/dist/
+*.test
+*.out
+coverage.txt
+
+# Frontend build output (embedded at build time — not committed)
+internal/api/static/assets/
+internal/api/static/*.js
+internal/api/static/*.css
+internal/api/static/*.html
+
+# Frontend
+web/node_modules/
+web/dist/
+
+# Env / secrets
+.env
+*.local
+orbit.toml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp

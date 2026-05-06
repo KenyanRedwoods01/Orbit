@@ -1,0 +1,423 @@
+/* ── Overlay ────────────────────────────────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 20px;
+}
+
+.modal {
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 7px;
+  width: 100%;
+  max-width: 780px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0,0,0,.5);
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.headerAccent {
+  width: 3px;
+  height: 36px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.headerTitle {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: monospace;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+  margin-bottom: 5px;
+}
+
+.headerSub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.closeBtn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  flex-shrink: 0;
+}
+
+.closeBtn:hover {
+  background: var(--color-danger-dim);
+  border-color: rgba(244,67,54,.2);
+  color: var(--color-danger);
+}
+
+/* ── Tabs ───────────────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  padding: 0 18px;
+}
+
+.tab {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: -1px;
+}
+
+.tab:hover { color: var(--color-text); }
+.tabActive { color: var(--color-accent) !important; border-bottom-color: var(--color-accent) !important; }
+
+.tabCount {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 8px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+/* ── Body ───────────────────────────────────────────────────────── */
+.body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px;
+}
+
+/* ── Stats tab ──────────────────────────────────────────────────── */
+.statsTab {}
+
+.miniStats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.miniStat {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  padding: 9px 10px;
+  text-align: center;
+}
+
+.miniStatLabel {
+  font-size: 9px;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+.miniStatVal {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: monospace;
+  letter-spacing: -0.02em;
+}
+
+/* ── Shared section card ────────────────────────────────────────── */
+.sectionCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.sectionCardHeader {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sectionCardBody {}
+
+/* ── Logs tab ────────────────────────────────────────────────────── */
+.logsTab {}
+
+.mockLog {
+  background: #0c0e14;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  margin-top: 10px;
+  overflow: hidden;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.logLine {
+  display: flex;
+  gap: 12px;
+  padding: 0 12px;
+}
+
+.logLineNum {
+  color: #3a3f52;
+  min-width: 24px;
+  text-align: right;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.logLineText {
+  color: #9ea3b8;
+  white-space: pre-wrap;
+  word-break: break-all;
+  flex: 1;
+  padding: 1px 0;
+}
+
+.logError { color: #fc8181; }
+.logWarn  { color: #f6ad55; }
+.logOk    { color: #68d391; }
+
+/* ── Inspect tab ─────────────────────────────────────────────────── */
+.inspectTab {}
+
+.inspectGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.inspectRow {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.inspectRow:nth-child(even) { border-right: 1px solid var(--color-border); }
+
+.inspectKey {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.inspectVal {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inspectValMono {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.copyBtn {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--transition-base);
+}
+
+.copyBtn:hover {
+  background: var(--color-surface-raised);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.mountRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.mountRow:last-child { border-bottom: none; }
+
+.emptyInline {
+  padding: 18px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-dim);
+}
+
+/* ── Terminal tab ────────────────────────────────────────────────── */
+.terminalTab {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.terminalBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  padding: 7px 12px;
+}
+
+.terminalBody {
+  background: #0c0e14;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  padding: 12px 14px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  min-height: 260px;
+  max-height: 360px;
+  overflow-y: auto;
+  color: #b8bdd1;
+}
+
+.termLine {
+  min-height: 1.65em;
+}
+
+.termInput {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: #b8bdd1;
+  caret-color: #4a9eff;
+  width: 100%;
+}
+
+.terminalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ── Events tab ──────────────────────────────────────────────────── */
+.eventsTab {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.eventRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  position: relative;
+}
+
+.eventDot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: #fff;
+  z-index: 1;
+}
+
+.eventLine {
+  position: absolute;
+  left: 14px;
+  top: 38px;
+  bottom: -10px;
+  width: 2px;
+  background: var(--color-border);
+}
+
+.eventBody {
+  flex: 1;
+}
+
+.eventMsg {
+  font-size: 12px;
+  color: var(--color-text);
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.eventTs {
+  font-size: 10px;
+  color: var(--color-text-dim);
+  font-family: monospace;
+}
+
+.eventType {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 7px;
+  text-transform: capitalize;
+  flex-shrink: 0;
+}

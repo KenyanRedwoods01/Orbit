@@ -1,0 +1,237 @@
+.page { padding: 20px 28px; display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; }
+
+/* ── Hero ── */
+.hero {
+  background: linear-gradient(135deg, rgba(74,158,255,0.10) 0%, rgba(167,139,250,0.10) 50%, rgba(104,211,145,0.06) 100%);
+  border: 1px solid rgba(74,158,255,0.2);
+  border-radius: 7px;
+  padding: 24px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -50px; right: -50px;
+  width: 250px; height: 250px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(74,158,255,0.10) 0%, transparent 70%);
+  pointer-events: none;
+}
+.heroLeft {}
+.heroTitle { font-size: 20px; font-weight: 700; margin-bottom: 5px; }
+.heroSub { font-size: 12.5px; color: var(--color-text-dim); line-height: 1.5; max-width: 480px; }
+.heroRight { display: flex; gap: 10px; flex-shrink: 0; }
+.heroStat { text-align: center; padding: 10px 18px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; min-width: 72px; }
+.heroStatVal { font-size: 24px; font-weight: 700; color: var(--color-accent, #4a9eff); }
+.heroStatLbl { font-size: 10px; color: var(--color-text-dim); margin-top: 2px; text-transform: uppercase; letter-spacing: .05em; }
+
+/* ── Stats row ── */
+.statsRow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 900px) { .statsRow { grid-template-columns: repeat(2,1fr); } }
+.statCard { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 7px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+.statIcon { width: 36px; height: 36px; border-radius: 7px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.statIcon svg { width: 17px; height: 17px; }
+.statVal { font-size: 22px; font-weight: 700; line-height: 1.1; }
+.statLbl { font-size: 10px; color: var(--color-text-dim); margin-top: 2px; }
+
+/* ── Toolbar ── */
+.toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 7px; padding: 8px 14px; }
+.searchWrap { position: relative; flex: 1; min-width: 220px; max-width: 380px; display: flex; align-items: center; }
+.searchIcon { position: absolute; left: 9px; width: 14px; height: 14px; color: var(--color-text-dim); pointer-events: none; }
+.searchIcon svg { width: 14px; height: 14px; }
+.searchInput { width: 100%; padding: 7px 28px 7px 30px; background: var(--color-bg,#0d1117); border: 1px solid var(--color-border); border-radius: 6px; font-size: 12.5px; color: var(--color-text); outline: none; }
+.searchInput:focus { border-color: var(--color-accent); }
+.searchClear { position: absolute; right: 8px; background: none; border: none; cursor: pointer; color: var(--color-text-dim); display: flex; align-items: center; padding: 0; }
+.searchClear svg { width: 12px; height: 12px; }
+.filterSelect { padding: 6px 10px; background: var(--color-bg,#0d1117); border: 1px solid var(--color-border); border-radius: 6px; font-size: 12px; color: var(--color-text); outline: none; cursor: pointer; }
+.toolbarDiv { width: 1px; height: 20px; background: var(--color-border); flex-shrink: 0; }
+.viewToggle { display: flex; gap: 2px; }
+.viewBtn { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: none; border: 1px solid transparent; border-radius: 6px; cursor: pointer; color: var(--color-text-dim); transition: all .15s; }
+.viewBtn:hover { color: var(--color-text); background: var(--color-bg,#0d1117); }
+.viewBtnActive { background: var(--color-bg,#0d1117); border-color: var(--color-border); color: var(--color-accent); }
+
+/* ── Category pills ── */
+.catRow { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.catPill { padding: 5px 13px; border-radius: 20px; border: 1px solid var(--color-border); background: transparent; color: var(--color-text-dim); font-size: 12px; cursor: pointer; transition: all .15s; }
+.catPill:hover { color: var(--color-text); border-color: rgba(255,255,255,0.2); }
+.catPillActive { background: rgba(74,158,255,0.12); border-color: #4a9eff; color: #4a9eff; }
+.resultCount { margin-left: auto; font-size: 11px; color: var(--color-text-dim); }
+
+/* ── App grid ── */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+
+.appCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all .18s;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.appCard:hover { border-color: rgba(255,255,255,0.2); transform: translateY(-1px); box-shadow: 0 6px 24px rgba(0,0,0,0.3); }
+.appCardRunning { border-color: rgba(104,211,145,0.3); }
+.appCardAccent { height: 3px; width: 100%; background: var(--color-accent,#4a9eff); flex-shrink: 0; }
+.appCardBody { padding: 16px; display: flex; flex-direction: column; gap: 11px; flex: 1; }
+
+.appCardTop { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.appIconArea { display: flex; align-items: center; gap: 10px; }
+.appIconBadge { width: 40px; height: 40px; border-radius: 7px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.appIconBadge svg { width: 22px; height: 22px; }
+.appName { font-size: 14px; font-weight: 600; color: var(--color-text); }
+.appTagline { font-size: 11px; color: var(--color-text-dim); margin-top: 1px; }
+
+.appBadges { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+.statusChip { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 20px; font-size: 10.5px; font-weight: 600; white-space: nowrap; border: 1px solid; }
+.statusDot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.catBadge { font-size: 9.5px; padding: 2px 7px; border-radius: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+
+.appDesc { font-size: 12px; color: var(--color-text-dim); line-height: 1.5; }
+
+.featureList { display: flex; flex-direction: column; gap: 4px; }
+.featureItem { display: flex; align-items: flex-start; gap: 7px; font-size: 11.5px; color: var(--color-text-muted); }
+.featureCheck { width: 15px; height: 15px; border-radius: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+
+.appCardFoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 4px; border-top: 1px solid var(--color-border); margin-top: auto; }
+.appTags { display: flex; gap: 4px; flex-wrap: wrap; }
+.tagChip { font-size: 10px; padding: 2px 7px; background: var(--color-bg,#0d1117); border: 1px solid var(--color-border); border-radius: 4px; color: var(--color-text-dim); }
+.cardActions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.btnDetails { padding: 5px 11px; border-radius: 6px; font-size: 11.5px; font-weight: 600; background: transparent; border: 1px solid var(--color-border); color: var(--color-text); cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all .15s; }
+.btnDetails:hover { background: var(--color-bg,#0d1117); border-color: var(--color-accent); color: var(--color-accent); }
+.btnInstall { padding: 5px 11px; border-radius: 6px; font-size: 11.5px; font-weight: 600; background: rgba(74,158,255,0.15); border: 1px solid rgba(74,158,255,0.4); color: #4a9eff; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all .15s; }
+.btnInstall:hover { background: rgba(74,158,255,0.25); }
+
+/* ── List view ── */
+.listView { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--color-border); border-radius: 7px; overflow: hidden; }
+.listHead { display: grid; grid-template-columns: 2fr 1.2fr 0.8fr 1fr 0.8fr 1.1fr; gap: 12px; padding: 9px 16px; background: var(--color-bg,#0d1117); border-bottom: 1px solid var(--color-border); font-size: 10.5px; font-weight: 700; color: var(--color-text-dim); text-transform: uppercase; letter-spacing: .05em; }
+.listRow { display: grid; grid-template-columns: 2fr 1.2fr 0.8fr 1fr 0.8fr 1.1fr; gap: 12px; padding: 11px 16px; border-bottom: 1px solid var(--color-border); cursor: pointer; transition: background .12s; align-items: center; }
+.listRow:last-child { border-bottom: none; }
+.listRow:hover { background: rgba(255,255,255,0.03); }
+.listAppName { display: flex; align-items: center; gap: 10px; }
+.listIconBadge { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.listIconBadge svg { width: 16px; height: 16px; }
+.listName { font-size: 12.5px; font-weight: 600; }
+.listDesc { font-size: 11px; color: var(--color-text-dim); margin-top: 1px; }
+.listVer { font-size: 11.5px; color: var(--color-text-dim); font-family: monospace; }
+.listActions { display: flex; align-items: center; gap: 6px; }
+
+/* ── Empty state ── */
+.emptyState { text-align: center; padding: 60px 20px; color: var(--color-text-dim); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.emptyState svg { width: 40px; height: 40px; opacity: .3; }
+.clearBtn { padding: 7px 16px; border-radius: 6px; border: 1px solid var(--color-border); background: none; color: var(--color-text-dim); font-size: 12px; cursor: pointer; }
+.clearBtn:hover { color: var(--color-text); }
+
+/* ── Detail page ── */
+.detailPage { padding: 20px 28px; display: flex; flex-direction: column; gap: 16px; }
+.backLink { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--color-text-dim); cursor: pointer; width: fit-content; padding: 4px 0; transition: color .15s; }
+.backLink:hover { color: var(--color-text); }
+
+.detailHeader {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  padding: 22px 24px;
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+.detailIconWrap { width: 56px; height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.detailIconWrap svg { width: 30px; height: 30px; }
+.detailMeta { flex: 1; min-width: 0; }
+.detailName { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+.detailTagline { font-size: 13px; color: var(--color-text-dim); margin-bottom: 8px; }
+.detailVerRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.detailVer { font-size: 11.5px; color: var(--color-text-dim); font-family: monospace; }
+.detailBadge { font-size: 10.5px; padding: 3px 8px; border-radius: 4px; font-weight: 600; }
+.detailActions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btnPrimary { padding: 7px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; background: rgba(74,158,255,0.15); border: 1px solid rgba(74,158,255,0.4); color: #4a9eff; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: all .15s; }
+.btnPrimary:hover { background: rgba(74,158,255,0.25); }
+.btnPrimary:disabled { opacity: .5; cursor: not-allowed; }
+.btnSecondary { padding: 7px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; background: transparent; border: 1px solid var(--color-border); color: var(--color-text); cursor: pointer; display: flex; align-items: center; gap: 5px; transition: all .15s; }
+.btnSecondary:hover { background: rgba(255,255,255,0.05); }
+.btnSuccess { padding: 7px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; background: rgba(104,211,145,0.12); border: 1px solid rgba(104,211,145,0.35); color: #68d391; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: all .15s; }
+.btnSuccess:hover { background: rgba(104,211,145,0.22); }
+.btnDanger { padding: 7px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; background: rgba(255,77,77,0.10); border: 1px solid rgba(255,77,77,0.3); color: #ff4d4d; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: all .15s; }
+.btnDanger:hover { background: rgba(255,77,77,0.18); }
+.btnWarning { padding: 7px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; background: rgba(246,173,85,0.12); border: 1px solid rgba(246,173,85,0.3); color: #f6ad55; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: all .15s; }
+.btnWarning:hover { background: rgba(246,173,85,0.22); }
+
+.detailHeaderRight { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+.portBadge { font-size: 12px; font-weight: 600; padding: 5px 11px; background: rgba(255,255,255,0.05); border: 1px solid var(--color-border); border-radius: 7px; color: var(--color-text-dim); font-family: monospace; }
+.openLink { font-size: 11px; color: #4a9eff; cursor: pointer; text-decoration: underline; }
+
+/* ── Preflight check ── */
+.preflightBanner { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 7px; padding: 18px 20px; }
+.preflightTitle { font-size: 13px; font-weight: 700; margin-bottom: 12px; }
+.preflightList { display: flex; flex-direction: column; gap: 7px; }
+.preflightItem { display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
+.preflightIcon { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.preflightIcon svg { width: 11px; height: 11px; }
+.preflightLabel { font-weight: 600; min-width: 220px; }
+.preflightDetail { color: var(--color-text-dim); font-size: 11.5px; }
+
+/* ── Progress / install banner ── */
+.installBanner { background: var(--color-surface); border: 1px solid rgba(74,158,255,0.3); border-radius: 7px; padding: 18px 20px; display: flex; align-items: center; gap: 14px; }
+.installSpinner { width: 28px; height: 28px; border: 3px solid rgba(74,158,255,0.2); border-top-color: #4a9eff; border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.installText {}
+.installTitle { font-size: 13.5px; font-weight: 700; color: #4a9eff; margin-bottom: 3px; }
+.installSub { font-size: 12px; color: var(--color-text-dim); }
+
+/* ── Not installed banner ── */
+.notInstalledBanner { background: var(--color-surface); border: 1px solid rgba(246,173,85,0.3); border-radius: 7px; padding: 16px 20px; display: flex; align-items: center; gap: 14px; }
+.notInstalledBanner svg { width: 22px; height: 22px; color: #f6ad55; flex-shrink: 0; }
+.notInstalledText { flex: 1; }
+.notInstalledTitle { font-size: 13px; font-weight: 700; color: #f6ad55; margin-bottom: 2px; }
+.notInstalledSub { font-size: 12px; color: var(--color-text-dim); }
+
+/* ── Tabs ── */
+.tabBar { display: flex; gap: 0; border-bottom: 1px solid var(--color-border); }
+.tab { padding: 10px 18px; border: none; background: none; font-size: 13px; color: var(--color-text-dim); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s; }
+.tab:hover { color: var(--color-text); }
+.tabActive { color: var(--color-accent, #4a9eff); border-bottom-color: var(--color-accent, #4a9eff); font-weight: 600; }
+
+/* ── Cards ── */
+.cardGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 900px) { .cardGrid { grid-template-columns: 1fr; } }
+.card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 7px; padding: 18px 20px; }
+.cardTitle { font-size: 11px; font-weight: 700; color: var(--color-text-dim); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px; }
+
+/* ── Feature list ── */
+.featureListCard { display: flex; flex-direction: column; gap: 7px; }
+.featureItemCard { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; color: var(--color-text-muted); }
+.featureCheckCard { width: 16px; height: 16px; border-radius: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+.featureCheckCard svg { width: 10px; height: 10px; }
+
+/* ── Requirements ── */
+.reqGrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.reqItem { text-align: center; padding: 12px 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 7px; }
+.reqVal { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.reqLbl { font-size: 10px; color: var(--color-text-dim); text-transform: uppercase; letter-spacing: .04em; }
+.portList { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.portChip { font-size: 11.5px; padding: 4px 10px; background: rgba(74,158,255,0.10); border: 1px solid rgba(74,158,255,0.25); border-radius: 5px; color: #4a9eff; font-family: monospace; }
+
+/* ── Install command ── */
+.cmdBlock { background: var(--color-bg,#0d1117); border: 1px solid var(--color-border); border-radius: 7px; padding: 14px 16px; font-family: monospace; font-size: 11.5px; color: var(--color-text-muted); white-space: pre-wrap; word-break: break-all; line-height: 1.6; max-height: 140px; overflow-y: auto; }
+.cmdCopyRow { display: flex; justify-content: flex-end; margin-top: 8px; }
+
+/* ── Logs ── */
+.logBlock { background: var(--color-bg,#0d1117); border: 1px solid var(--color-border); border-radius: 7px; padding: 14px 16px; font-family: monospace; font-size: 11px; max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+.logLine { display: flex; gap: 10px; align-items: flex-start; line-height: 1.5; }
+.logLineFull { font-size: 11px; color: var(--color-text-dim); line-height: 1.5; word-break: break-all; }
+
+/* ── Port config input ── */
+.portInput { padding: 7px 10px; background: var(--color-bg,#0d1117); border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; color: var(--color-text); outline: none; width: 120px; font-family: monospace; }
+.portInput:focus { border-color: var(--color-accent); }
+
+.infoRow { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.infoKey { color: var(--color-text-dim); min-width: 90px; }
+.infoVal { color: var(--color-text); font-family: monospace; font-size: 11.5px; }
+.infoLink { color: #4a9eff; cursor: pointer; text-decoration: underline; font-size: 12px; }
