@@ -1,0 +1,16 @@
+listen_addr = "0.0.0.0:5000"
+data_dir    = "/home/runner/workspace/.orbit-data"
+secret_key  = "dev-secret-key-change-in-production-abc123xyz"
+
+[modules]
+metrics      = true
+services     = true
+logs         = true
+firewall     = true
+web_server   = true
+deploy       = true
+database     = true
+uptime       = true
+security     = true
+multi_server = true
+containers   = true

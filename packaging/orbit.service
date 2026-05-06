@@ -1,0 +1,28 @@
+[Unit]
+Description=Orbit VPS management panel
+Documentation=https://orbit.sh/docs
+After=network.target
+
+[Service]
+Type=simple
+User=orbit
+Group=orbit
+ExecStart=/usr/local/bin/orbit --config /etc/orbit/orbit.toml
+Restart=on-failure
+RestartSec=5s
+
+# Give orbit only the capabilities it needs:
+#   CAP_NET_ADMIN   — read and write firewall rules via nftables/iptables
+#   CAP_SYS_PTRACE  — read /proc/<pid>/maps for accurate per-process stats
+AmbientCapabilities=CAP_NET_ADMIN CAP_SYS_PTRACE
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_PTRACE
+
+# Harden the service
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/orbit /run/orbit
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

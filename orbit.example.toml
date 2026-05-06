@@ -1,0 +1,50 @@
+# orbit.toml — Orbit VPS configuration
+# Default location: /etc/orbit/orbit.toml
+# Orbit will start with built-in defaults if this file is absent.
+
+# Address and port to listen on.
+# For a Nginx-fronted install, use "127.0.0.1:3900" instead.
+listen_addr = "0.0.0.0:3900"
+
+# Directory for SQLite database and BoltDB metric ring.
+data_dir = "/var/lib/orbit"
+
+# TLS certificate and key.
+# Leave empty to auto-generate a self-signed cert on first run.
+# tls_cert_file = "/etc/orbit/tls.crt"
+# tls_key_file  = "/etc/orbit/tls.key"
+
+# JWT signing secret. Auto-generated on first run if empty.
+# secret_key = "change-me"
+
+# ── Modules ──────────────────────────────────────────────────────────────────
+# Set any module to false to disable it entirely.
+[modules]
+metrics      = true
+services     = true
+logs         = true
+firewall     = true
+web_server   = true
+deploy       = true
+database     = true
+uptime       = true
+security     = true
+multi_server = true
+containers   = true
+
+# ── MCP ──────────────────────────────────────────────────────────────────────
+[mcp]
+enabled     = false
+socket_path = "/run/orbit/mcp.sock"
+
+# Optional TCP listener for remote agents (e.g. claude.ai cloud).
+# Requires token authentication. Disabled by default.
+# tcp_addr = "127.0.0.1:3901"
+
+# ── Remote servers ────────────────────────────────────────────────────────────
+# Add as many [server] blocks as you like.
+# [[server]]
+# name     = "web-01"
+# host     = "192.168.1.10"
+# user     = "ubuntu"
+# key_file = "/home/orbit/.ssh/id_ed25519"

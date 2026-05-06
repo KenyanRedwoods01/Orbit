@@ -1,0 +1,181 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 20px;
+}
+
+.modal {
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 7px;
+  width: 100%;
+  max-width: 640px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0,0,0,.5);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.headerTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 2px;
+}
+
+.headerSub {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.closeBtn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.closeBtn:hover {
+  background: var(--color-danger-dim);
+  border-color: rgba(244,67,54,.2);
+  color: var(--color-danger);
+}
+
+/* ── Stepper ────────────────────────────────────────────────────── */
+.stepper {
+  display: flex;
+  align-items: center;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  overflow-x: auto;
+  gap: 0;
+}
+
+.stepperItem {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.stepperDot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--color-surface-raised);
+  border: 1.5px solid var(--color-border);
+  color: var(--color-text-dim);
+  flex-shrink: 0;
+  transition: all var(--transition-base);
+}
+
+.stepperActive {
+  background: var(--color-accent-dim) !important;
+  border-color: var(--color-accent) !important;
+  color: var(--color-accent) !important;
+}
+
+.stepperDone {
+  background: var(--color-success-dim) !important;
+  border-color: rgba(76,175,80,.4) !important;
+  color: var(--color-success) !important;
+}
+
+.stepperLabel {
+  font-size: 10px;
+  color: var(--color-text-dim);
+  margin-left: 6px;
+  white-space: nowrap;
+  transition: color var(--transition-base);
+}
+
+.stepperLabelActive { color: var(--color-text) !important; font-weight: 500; }
+
+.stepperLine {
+  width: 28px;
+  height: 1.5px;
+  background: var(--color-border);
+  margin: 0 8px;
+  flex-shrink: 0;
+  transition: background var(--transition-base);
+}
+
+.stepperLineDone { background: var(--color-success); }
+
+/* ── Body ───────────────────────────────────────────────────────── */
+.body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+/* ── Form grid ──────────────────────────────────────────────────── */
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.fieldFull { grid-column: 1 / -1; }
+
+/* ── Remove btn ─────────────────────────────────────────────────── */
+.rmBtn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.rmBtn:hover {
+  background: var(--color-danger-dim);
+  border-color: rgba(244,67,54,.2);
+  color: var(--color-danger);
+}
+
+.rmBtn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ── Footer ─────────────────────────────────────────────────────── */
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+  background: var(--color-surface-raised);
+}

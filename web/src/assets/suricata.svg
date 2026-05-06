@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0e7abf"/>
+      <stop offset="100%" style="stop-color:#00c4ff"/>
+    </linearGradient>
+  </defs>
+  <!-- Body -->
+  <ellipse cx="100" cy="110" rx="48" ry="28" fill="url(#sg)" opacity=".92"/>
+  <!-- Tail fin -->
+  <polygon points="148,110 175,88 178,132" fill="#0e7abf"/>
+  <!-- Top fin -->
+  <polygon points="85,82 100,50 115,82" fill="#00c4ff" opacity=".85"/>
+  <!-- Eye -->
+  <circle cx="62" cy="104" r="6" fill="#fff" opacity=".95"/>
+  <circle cx="62" cy="104" r="3" fill="#001e3c"/>
+  <!-- Gill lines -->
+  <path d="M72 95 Q68 110 72 125" fill="none" stroke="#fff" stroke-width="2" opacity=".5"/>
+  <path d="M78 93 Q74 110 78 127" fill="none" stroke="#fff" stroke-width="1.5" opacity=".35"/>
+  <!-- Scan lines (IDS effect) -->
+  <line x1="22" y1="60" x2="178" y2="60" stroke="#00c4ff" stroke-width="1" opacity=".25"/>
+  <line x1="22" y1="150" x2="178" y2="150" stroke="#00c4ff" stroke-width="1" opacity=".25"/>
+  <!-- Corner brackets -->
+  <path d="M22,22 L22,40 M22,22 L40,22" fill="none" stroke="#00c4ff" stroke-width="2.5" opacity=".7"/>
+  <path d="M178,22 L178,40 M178,22 L160,22" fill="none" stroke="#00c4ff" stroke-width="2.5" opacity=".7"/>
+  <path d="M22,178 L22,160 M22,178 L40,178" fill="none" stroke="#00c4ff" stroke-width="2.5" opacity=".7"/>
+  <path d="M178,178 L178,160 M178,178 L160,178" fill="none" stroke="#00c4ff" stroke-width="2.5" opacity=".7"/>
+</svg>
