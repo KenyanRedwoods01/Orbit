@@ -390,14 +390,91 @@ function mapAuditEntry(e: AuditEntry): TimelineEvent {
   else if (p.includes('/restart')) type = 'restart'
   else if (p.includes('/security')) type = 'security'
   else if (p.includes('/update') || p.includes('/upgrade')) type = 'update'
+  else if (e.status >= 400) type = 'incident'
   return {
     id: String(e.id),
     time: new Date(e.ts * 1000).toLocaleTimeString(),
     type,
     server: 'localhost',
     details: `${e.method} ${e.path} → ${e.status}`,
-    user: e.user,
+    user: e.user || 'system',
+    _rawTs: e.ts,
+    _method: e.method,
+    _path: e.path,
+    _status: e.status,
+    _ip: e.ip,
   }
+}
+
+// ── Timeline Detail Modal ─────────────────────────────────────────────────────
+function TimelineDetailModal({ ev, onClose }: { ev: TimelineEvent; onClose: () => void }) {
+  const statusColor = !ev._status ? 'var(--color-text-dim)'
+    : ev._status >= 500 ? 'var(--color-danger)'
+    : ev._status >= 400 ? '#f6ad55'
+    : 'var(--color-success)'
+
+  const typeColor: Record<string, string> = {
+    security: 'var(--color-danger)', incident: 'var(--color-danger)',
+    deploy: 'var(--color-accent)', login: 'var(--color-text-muted)',
+    restart: 'var(--color-warning)', update: 'var(--color-accent)', scan: 'var(--color-warning)',
+  }
+
+  const fullTime = ev._rawTs
+    ? new Date(ev._rawTs * 1000).toLocaleString()
+    : ev.time
+
+  return (
+    <div className={styles.overlay} onClick={onClose}>
+      <div className={styles.modal} onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
+        <div className={styles.modalHeader}>
+          <div className={styles.modalTitle} style={{ gap: 8 }}>
+            <span style={{ color: typeColor[ev.type] ?? 'var(--color-accent)' }}>{timelineIcon(ev.type)}</span>
+            <span>Event Details</span>
+            <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700, background: `${typeColor[ev.type] ?? 'var(--color-accent)'}22`, color: typeColor[ev.type] ?? 'var(--color-accent)', border: `1px solid ${typeColor[ev.type] ?? 'var(--color-accent)'}44`, padding: '2px 7px', borderRadius: 4 }}>{ev.type}</span>
+          </div>
+          <button className={styles.modalClose} onClick={onClose}><IcClose /></button>
+        </div>
+        <div className={styles.modalBody}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {[
+              { label: 'Timestamp', value: fullTime },
+              { label: 'Server', value: ev.server },
+              { label: 'User', value: ev.user || '—' },
+              { label: 'IP Address', value: ev._ip || '—' },
+            ].map(row => (
+              <div key={row.label} style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', borderRadius: 7, padding: '8px 12px' }}>
+                <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{row.label}</div>
+                <div style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--color-text)' }}>{row.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {(ev._method || ev._path) && (
+            <div style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', borderRadius: 7, padding: '10px 12px' }}>
+              <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>HTTP Request</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {ev._method && <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'monospace', background: 'rgba(74,158,255,0.12)', color: 'var(--color-accent)', padding: '2px 8px', borderRadius: 4 }}>{ev._method}</span>}
+                {ev._path && <span style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--color-text)', flex: 1, wordBreak: 'break-all' }}>{ev._path}</span>}
+                {ev._status !== undefined && (
+                  <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: statusColor, background: `${statusColor}18`, padding: '2px 8px', borderRadius: 4, border: `1px solid ${statusColor}33`, marginLeft: 'auto' }}>
+                    {ev._status}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', borderRadius: 7, padding: '10px 12px' }}>
+            <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>Details</div>
+            <div style={{ fontSize: 12.5, color: 'var(--color-text)', lineHeight: 1.5 }}>{ev.details}</div>
+          </div>
+        </div>
+        <div className={styles.modalActions} style={{ padding: '10px 16px', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end' }}>
+          <button className={styles.btnSecondary} onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function mapContainer(c: Container): ContainerStat {
@@ -930,6 +1007,7 @@ export default function MetricsPage() {
 
   // timeline state
   const [timelineFilter, setTimelineFilter] = useState<'all'|'security'|'deploy'|'login'|'incident'>('all')
+  const [selectedTimelineEvent, setSelectedTimelineEvent] = useState<TimelineEvent | null>(null)
 
   // UI toggles
   const [showTerminal, setShowTerminal] = useState(false)
@@ -1008,9 +1086,8 @@ export default function MetricsPage() {
   const secScore = securityApiData?.score != null ? Math.round(securityApiData.score) : 0
   const secGrade = securityApiData?.grade ?? (secScore >= 90 ? 'A' : secScore >= 75 ? 'B' : secScore >= 60 ? 'C' : 'D')
   const secGradeColor = secScore >= 90 ? 'var(--color-success)' : secScore >= 75 ? 'var(--color-warning)' : 'var(--color-danger)'
-  const secTotal = securityChecks.length
-  const secOk    = securityChecks.filter(c => c.status === 'ok').length
-  const secFail  = securityChecks.filter(c => c.status === 'fail').length
+  const secOk  = securityChecks.filter(c => c.status === 'ok').length
+  const secFail = securityChecks.filter(c => c.status === 'fail').length
 
   const lastLoginEntry = auditData?.entries?.find(e => e.path.includes('/auth/login') && e.status === 200)
   const lastLoginAgo = lastLoginEntry
@@ -1092,11 +1169,11 @@ export default function MetricsPage() {
         <div className={`${styles.statCard} ${styles.statCardClickable}`}>
           <div className={styles.statCardIcon} style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--color-danger)' }}><IcShield /></div>
           <div className={styles.statCardBody}>
-            <div className={styles.statCardVal}>{secTotal > 0 ? secScore : '—'}<span className={styles.statCardGrade}>/100</span></div>
+            <div className={styles.statCardVal}>{secScore}<span className={styles.statCardGrade}>/100</span></div>
             <div className={styles.statCardLabel}>Security Score</div>
             <div className={styles.statCardSub}>{secOk} checks passed · {secFail} critical</div>
           </div>
-          <div className={styles.statCardTrend} style={{ color: secGradeColor }}>{secTotal > 0 ? `Grade ${secGrade}` : '—'}</div>
+          <div className={styles.statCardTrend} style={{ color: secGradeColor }}>Grade {secGrade}</div>
         </div>
         <div className={styles.statCard}>
           <div className={styles.statCardIcon} style={{ background: 'rgba(74,158,255,0.1)', color: 'var(--color-accent)' }}><IcCpu /></div>
@@ -1516,8 +1593,11 @@ export default function MetricsPage() {
           </div>
         </div>
         <div className={styles.timeline}>
+          {filteredTimeline.length === 0 && (
+            <div className={styles.empty}>No activity events recorded yet.</div>
+          )}
           {filteredTimeline.map((e, i) => (
-            <div key={e.id} className={styles.timelineItem}>
+            <div key={e.id} className={styles.timelineItem} style={{ cursor: 'pointer' }} onClick={() => setSelectedTimelineEvent(e)}>
               <div className={styles.timelineIconWrap}>
                 <div className={styles.timelineIcon}>{timelineIcon(e.type)}</div>
                 {i < filteredTimeline.length - 1 && <div className={styles.timelineLine} />}
@@ -1528,11 +1608,12 @@ export default function MetricsPage() {
                   <span className={styles.timelineServer}>{e.server}</span>
                   <span className={styles.timelineUser}>{e.user}</span>
                   <span className={styles.timelineTypeBadge}>{e.type}</span>
+                  {e._ip && <span className={styles.timelineUser} style={{ marginLeft: 2 }}>{e._ip}</span>}
                 </div>
                 <div className={styles.timelineDetails}>{e.details}</div>
               </div>
               <div className={styles.timelineActions}>
-                <button className={styles.rowBtn} title="Details"><IcEye /></button>
+                <button className={styles.rowBtn} title="View Details" onClick={ev => { ev.stopPropagation(); setSelectedTimelineEvent(e) }}><IcEye /></button>
               </div>
             </div>
           ))}
@@ -1635,6 +1716,7 @@ export default function MetricsPage() {
       {showAddServer && <AddServerModal onClose={() => setShowAddServer(false)} />}
       {selectedAlert && <AlertModal alert={selectedAlert} onClose={() => setSelectedAlert(null)} />}
       {showScan && <ScanModal onClose={() => setShowScan(false)} servers={servers} />}
+      {selectedTimelineEvent && <TimelineDetailModal ev={selectedTimelineEvent} onClose={() => setSelectedTimelineEvent(null)} />}
     </div>
   )
 }

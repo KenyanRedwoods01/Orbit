@@ -4,6 +4,7 @@ package api
 import (
         "context"
         "net/http"
+        "strings"
 
         "github.com/KenyanRedwoods01/Orbit/internal/config"
         "github.com/KenyanRedwoods01/Orbit/internal/db"
@@ -123,6 +124,7 @@ func (s *Server) registerRoutes() {
         s.mux.HandleFunc("POST /api/settings/restore-defaults",             s.requireAuth(s.handleSettingsRestoreDefaults))
         s.mux.HandleFunc("POST /api/settings/notif-test",                   s.requireAuth(s.handleSettingsNotifTest))
         s.mux.HandleFunc("GET /api/settings/check-updates",                 s.requireAuth(s.handleSettingsCheckUpdates))
+        s.mux.HandleFunc("GET /api/settings/releases",                      s.requireAuth(s.handleSettingsListReleases))
         s.mux.HandleFunc("DELETE /api/settings/backup-files/{id}",          s.requireAuth(s.handleSettingsBackupFileDelete))
         s.mux.HandleFunc("POST /api/settings/backup-files/{id}/restore",    s.requireAuth(s.handleSettingsBackupFileRestore))
         s.mux.HandleFunc("GET /api/settings/backup-files/{id}/download",    s.requireAuth(s.handleSettingsBackupFileDownload))
@@ -141,7 +143,15 @@ func (s *Server) registerRoutes() {
         s.mux.HandleFunc("GET /api/server/info", s.requireAuth(s.handleServerInfo))
 
         // ─── Prometheus metrics export (public /metrics + authed /api/metrics/prometheus) ───
-        s.mux.HandleFunc("GET /metrics", s.handlePrometheusMetrics)
+        // When a browser navigates to /metrics (the React route), serve the SPA instead of raw text.
+        s.mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
+                if strings.Contains(r.Header.Get("Accept"), "text/html") {
+                        r.URL.Path = "/"
+                        spaHandler{http.FS(staticFiles)}.ServeHTTP(w, r)
+                        return
+                }
+                s.handlePrometheusMetrics(w, r)
+        })
         s.mux.HandleFunc("GET /api/metrics/prometheus", s.requireAuth(s.handlePrometheusMetrics))
 
         // ─── Metrics ───
@@ -156,6 +166,7 @@ func (s *Server) registerRoutes() {
         s.mux.HandleFunc("POST /api/processes/{pid}/signal", s.requireAuth(s.auditMiddleware(s.handleProcessSignal)))
         s.mux.HandleFunc("POST /api/processes/{pid}/nice", s.requireAuth(s.auditMiddleware(s.handleProcessRenice)))
         s.mux.HandleFunc("GET /api/processes/{pid}/files", s.requireAuth(s.handleProcessOpenFiles))
+        s.mux.HandleFunc("GET /api/processes/{pid}/environ", s.requireAuth(s.handleProcessEnviron))
         s.mux.HandleFunc("POST /api/processes/batch-signal", s.requireAuth(s.auditMiddleware(s.handleProcessBatchSignal)))
 
         // ─── Services (systemd) ───
@@ -351,6 +362,7 @@ func (s *Server) registerRoutes() {
         s.mux.HandleFunc("POST /api/mcp/tokens", s.requireAuth(s.handleMCPTokenCreate))
         s.mux.HandleFunc("DELETE /api/mcp/tokens/{id}", s.requireAuth(s.handleMCPTokenRevoke))
         s.mux.HandleFunc("GET /api/mcp/audit", s.requireAuth(s.handleMCPAuditLog))
+        s.mux.HandleFunc("GET /api/mcp/stats", s.requireAuth(s.handleMCPStats))
 
         // ─── Notification Channels ───
         s.mux.HandleFunc("GET /api/notifications/channels", s.requireAuth(s.handleNotificationChannelList))

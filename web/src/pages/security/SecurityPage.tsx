@@ -1,5 +1,16 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, lazy, Suspense } from 'react'
 import { useQuery } from '@tanstack/react-query'
+// Lazy-load plugin management pages so they render inside the security tab
+const Fail2BanEmbed  = lazy(() => import('@/pages/plugins/Fail2BanPage'))
+const CrowdSecEmbed  = lazy(() => import('@/pages/plugins/CrowdSecPage'))
+const WazuhEmbed     = lazy(() => import('@/pages/plugins/WazuhPage'))
+const SuricataEmbed  = lazy(() => import('@/pages/plugins/SuricataPage'))
+const pluginEmbeds: Partial<Record<string, React.ComponentType>> = {
+  fail2ban: Fail2BanEmbed,
+  crowdsec:  CrowdSecEmbed,
+  wazuh:     WazuhEmbed,
+  suricata:  SuricataEmbed,
+}
 import { fetchSecurityAudit, fetchSecurityStats } from '@/lib/api'
 import {
   SEV_META,
@@ -596,16 +607,28 @@ export default function SecurityPage() {
         </>
       )}
 
-      {/* ── Plugin tabs — shown only when plugin is enabled ── */}
+      {/* ── Plugin tabs — embed the dedicated plugin management page ── */}
       {(['fail2ban','crowdsec','wazuh','suricata','clamav','docker','trivy'] as SectionTab[]).map(id =>
         tab === id ? (
-          <div key={id} className={styles.sectionCard}>
-            <div style={{ padding: '40px 16px', textAlign: 'center' }}>
-              <div style={{ fontSize: 13, color: 'var(--color-text-dim)', fontWeight: 600, marginBottom: 8 }}>Live data feed not yet available</div>
-              <div style={{ fontSize: 11, color: 'var(--color-text-dim)', maxWidth: 380, margin: '0 auto', lineHeight: 1.6 }}>
-                This plugin is enabled. Real-time data will appear here once the integration is fully configured and the data feed is active.
+          <div key={id}>
+            {pluginEmbeds[id] ? (
+              <Suspense fallback={
+                <div className={styles.sectionCard}>
+                  <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-dim)' }}>Loading plugin UI…</div>
+                </div>
+              }>
+                {React.createElement(pluginEmbeds[id]!)}
+              </Suspense>
+            ) : (
+              <div className={styles.sectionCard}>
+                <div style={{ padding: '40px 16px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, color: 'var(--color-text-dim)', fontWeight: 600, marginBottom: 8 }}>Plugin management not available</div>
+                  <div style={{ fontSize: 11, color: 'var(--color-text-dim)', maxWidth: 380, margin: '0 auto', lineHeight: 1.6 }}>
+                    This plugin is enabled but has no dedicated management interface yet.
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         ) : null
       )}

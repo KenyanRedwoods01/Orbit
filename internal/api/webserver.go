@@ -722,6 +722,12 @@ func (s *Server) handleWebServerLogs(w http.ResponseWriter, r *http.Request) {
                 }
         }
 
+        // Sanitize site name to prevent path traversal
+        site = filepath.Base(site)
+        if strings.ContainsAny(site, "/\\") || site == ".." {
+                site = ""
+        }
+
         logPath := "/var/log/nginx/access.log"
         if site != "" {
                 candidatePath := "/var/log/nginx/" + site + "-access.log"
