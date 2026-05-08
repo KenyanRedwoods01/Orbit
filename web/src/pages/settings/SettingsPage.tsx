@@ -16,15 +16,26 @@ import {
   fetchSettingsAPIConfig, saveSettingsAPIConfig,
   fetchSettingsAuditConfig, saveSettingsAuditConfig,
   fetchMetrics,
-  testSettingsNotification, checkSettingsUpdates,
+  testSettingsNotification, checkSettingsUpdates, fetchSettingsReleases,
   deleteSettingsBackupFile, restoreSettingsBackupFile, downloadSettingsBackupFileURL,
   type BackendUser, type BackendToken, type AuditEntry as BackendAuditEntry, type ApiPlugin,
   type AppearanceSettings, type NotifConfig,
   type BackupConfigSettings, type BackupFileInfo,
   type SecurityConfig, type APIConfig, type AuditConfig,
-  type UpdateCheckResult,
+  type UpdateCheckResult, type ReleaseInfo,
 } from '@/lib/api'
 import styles from './SettingsPage.module.css'
+import { marked } from 'marked'
+
+// Simple markdown → HTML renderer for release notes
+function renderMarkdown(src: string): string {
+  try {
+    const result = marked.parse(src, { async: false })
+    return typeof result === 'string' ? result : ''
+  } catch {
+    return src.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+  }
+}
 
 // ─────────────────────────────────────────────────────────
 // Types (moved inline — no longer from settingsData)
@@ -820,6 +831,17 @@ export default function SettingsPage() {
   // Update check state
   const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null)
   const [checkingUpdates, setCheckingUpdates] = useState(false)
+  const [selectedReleaseTag, setSelectedReleaseTag] = useState<string | null>(null)
+
+  // Fetch all releases (only when on updates tab)
+  const { data: allReleases = [] as ReleaseInfo[], isFetching: loadingReleases } = useQuery({
+    queryKey: ['settings-releases'],
+    queryFn: fetchSettingsReleases,
+    staleTime: 300000,
+    enabled: tab === 'updates',
+    retry: false,
+  })
+  const selectedRelease: ReleaseInfo | undefined = allReleases.find(r => r.tag_name === selectedReleaseTag) ?? allReleases[0]
 
   // Update channel + settings controlled state
   const [updateChannel, setUpdateChannel] = useState<'stable'|'beta'|'nightly'>('stable')
@@ -2219,16 +2241,54 @@ export default function SettingsPage() {
 
           {updateResult && (
             <div className={styles.sectionCard} style={{ marginBottom: 12 }}>
-              <div className={styles.sectionHead}><span className={styles.sectionTitle}>Update Check Result</span></div>
-              <div style={{ padding: 14 }}>
+              <div className={styles.sectionHead}>
+                <span className={styles.sectionTitle}>
+                  {updateResult.up_to_date ? 'Up to Date' : `Update Available — ${updateResult.latest_version}`}
+                </span>
+                {updateResult.release_url && (
+                  <a href={updateResult.release_url} target="_blank" rel="noreferrer" className={styles.iconBtn} style={{ fontSize: 11, textDecoration: 'none' }}>
+                    <IcoLink />View on GitHub
+                  </a>
+                )}
+              </div>
+              <div style={{ padding: '0 14px 14px' }}>
                 {updateResult.up_to_date ? (
-                  <div className={styles.infoBanner} style={{ background: 'rgba(34,197,94,0.07)', borderColor: 'rgba(34,197,94,0.2)', color: '#22c55e' }}>
+                  <div className={styles.infoBanner} style={{ background: 'rgba(34,197,94,0.07)', borderColor: 'rgba(34,197,94,0.2)', color: '#22c55e', marginBottom: 12 }}>
                     <IcoCheck /><span>You are running the latest version: <strong>{updateResult.current_version}</strong></span>
                   </div>
                 ) : (
-                  <div className={styles.warnBanner}>
-                    <IcoWarn /><span>New version available: <strong>{updateResult.latest_version}</strong> (current: {updateResult.current_version}){updateResult.release_url && <> — <a href={updateResult.release_url} target="_blank" rel="noreferrer" style={{ color: 'var(--color-accent)' }}>Release notes</a></>}</span>
+                  <div className={styles.warnBanner} style={{ marginBottom: 12 }}>
+                    <IcoWarn /><span>New version available: <strong>{updateResult.latest_version}</strong> — current: {updateResult.current_version}</span>
                   </div>
+                )}
+
+                {/* Release metadata */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 8, marginBottom: 14 }}>
+                  {[
+                    { label: 'Tag', value: updateResult.latest_version },
+                    { label: 'Release', value: updateResult.release_name || updateResult.latest_version },
+                    { label: 'Published', value: updateResult.release_date ? new Date(updateResult.release_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—' },
+                    { label: 'Current', value: updateResult.current_version },
+                  ].map(item => (
+                    <div key={item.label} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 7, padding: '8px 12px' }}>
+                      <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{item.label}</div>
+                      <div style={{ fontSize: 12.5, fontFamily: 'monospace', fontWeight: 600, color: 'var(--color-text)' }}>{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Rendered release notes */}
+                {updateResult.release_notes && (
+                  <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 7, padding: '14px 16px' }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Release Notes</div>
+                    <div
+                      className={styles.releaseNotes}
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(updateResult.release_notes) }}
+                    />
+                  </div>
+                )}
+                {!updateResult.release_notes && (
+                  <div style={{ fontSize: 12, color: 'var(--color-text-dim)', padding: '8px 0' }}>No release notes available for this version.</div>
                 )}
               </div>
             </div>
@@ -2266,6 +2326,105 @@ export default function SettingsPage() {
               <button className={styles.formBtn} onClick={handleCheckUpdates} disabled={checkingUpdates}><IcoRefresh />{checkingUpdates ? 'Checking…' : 'Check Now'}</button>
               <button className={`${styles.formBtn} ${styles.formBtnPrimary}`}><IcoCheck />Save</button>
             </div>
+          </div>
+
+          {/* Version History — all releases from GitHub */}
+          <div className={styles.sectionCard} style={{ marginBottom: 12 }}>
+            <div className={styles.sectionHead}>
+              <span className={styles.sectionTitle}>Version History</span>
+              {loadingReleases && <span style={{ fontSize: 11, color: 'var(--color-text-dim)', marginLeft: 8 }}>Loading…</span>}
+              {allReleases.length > 0 && <span className={styles.resultCount}><strong>{allReleases.length}</strong> releases</span>}
+            </div>
+            {allReleases.length === 0 && !loadingReleases ? (
+              <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--color-text-dim)' }}>
+                Could not load release list from GitHub. Check your internet connection or view releases at{' '}
+                <a href="https://github.com/KenyanRedwoods01/Orbit/releases" target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)' }}>github.com/KenyanRedwoods01/Orbit/releases</a>.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 0, minHeight: 260 }}>
+                {/* Release list sidebar */}
+                <div style={{ width: 210, flexShrink: 0, borderRight: '1px solid var(--color-border)', overflowY: 'auto', maxHeight: 480 }}>
+                  {allReleases.map(rel => (
+                    <button
+                      key={rel.tag_name}
+                      onClick={() => setSelectedReleaseTag(rel.tag_name)}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px',
+                        background: selectedRelease?.tag_name === rel.tag_name ? 'var(--color-surface-raised)' : 'transparent',
+                        border: 'none', borderBottom: '1px solid var(--color-border)',
+                        cursor: 'pointer', color: 'var(--color-text)', transition: 'background 0.1s',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 600, color: rel.is_current ? '#22c55e' : rel.is_latest ? '#4a9eff' : 'var(--color-text)' }}>
+                          {rel.tag_name}
+                        </span>
+                        {rel.is_current && <span style={{ fontSize: 9, fontWeight: 700, background: 'rgba(34,197,94,0.12)', color: '#22c55e', borderRadius: 4, padding: '1px 5px', letterSpacing: '0.04em' }}>INSTALLED</span>}
+                        {rel.is_latest && !rel.is_current && <span style={{ fontSize: 9, fontWeight: 700, background: 'rgba(74,158,255,0.12)', color: '#4a9eff', borderRadius: 4, padding: '1px 5px', letterSpacing: '0.04em' }}>LATEST</span>}
+                        {rel.prerelease && <span style={{ fontSize: 9, fontWeight: 700, background: 'rgba(245,158,11,0.12)', color: '#f59e0b', borderRadius: 4, padding: '1px 5px', letterSpacing: '0.04em' }}>PRE</span>}
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--color-text-dim)' }}>
+                        {rel.name || rel.tag_name}
+                      </div>
+                      <div style={{ fontSize: 9.5, color: 'var(--color-text-dim)', marginTop: 2 }}>
+                        {rel.published_at ? new Date(rel.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Release details panel */}
+                <div style={{ flex: 1, padding: 16, overflowY: 'auto', maxHeight: 480 }}>
+                  {selectedRelease ? (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12, gap: 12 }}>
+                        <div>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-text)', marginBottom: 2 }}>
+                            {selectedRelease.name || selectedRelease.tag_name}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--color-text-dim)', fontFamily: 'monospace' }}>
+                            {selectedRelease.tag_name}
+                            {selectedRelease.published_at && ` · ${new Date(selectedRelease.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}`}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                          <a href={selectedRelease.html_url} target="_blank" rel="noreferrer" className={styles.iconBtn} style={{ fontSize: 11, textDecoration: 'none' }}>
+                            <IcoLink />GitHub
+                          </a>
+                          {!selectedRelease.is_current && (
+                            <button
+                              className={`${styles.iconBtn} ${styles.iconBtnPrimary}`}
+                              style={{ fontSize: 11 }}
+                              onClick={() => alert(`To install ${selectedRelease.tag_name}, run:\nsudo orbit upgrade --version ${selectedRelease.tag_name}\n\nor via the installer:\ncurl -fsSL https://raw.githubusercontent.com/KenyanRedwoods01/Orbit/main/scripts/install.sh | sudo bash -s -- --version ${selectedRelease.tag_name}`)}
+                            >
+                              <IcoUpdate />Install {selectedRelease.tag_name}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {selectedRelease.is_current && (
+                        <div className={styles.infoBanner} style={{ background: 'rgba(34,197,94,0.07)', borderColor: 'rgba(34,197,94,0.2)', color: '#22c55e', marginBottom: 12 }}>
+                          <IcoCheck /><span>This is the currently installed version.</span>
+                        </div>
+                      )}
+                      {selectedRelease.body ? (
+                        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 7, padding: '12px 14px' }}>
+                          <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Release Notes</div>
+                          <div
+                            className={styles.releaseNotes}
+                            dangerouslySetInnerHTML={{ __html: renderMarkdown(selectedRelease.body) }}
+                          />
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 12, color: 'var(--color-text-dim)' }}>No release notes available for this version.</div>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 12, color: 'var(--color-text-dim)', padding: '20px 0' }}>Select a release to view its details.</div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Plugins */}

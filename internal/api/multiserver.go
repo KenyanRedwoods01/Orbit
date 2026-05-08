@@ -917,6 +917,10 @@ func (s *Server) handleManagedServerBulkExec(w http.ResponseWriter, r *http.Requ
                 cmd = "sudo " + cmd
         }
 
+        // Cap parallelism to prevent excessive goroutine/memory allocation
+        if req.Parallelism <= 0 || req.Parallelism > 50 {
+                req.Parallelism = 10
+        }
         var (
                 mu      sync.Mutex
                 results []execResult

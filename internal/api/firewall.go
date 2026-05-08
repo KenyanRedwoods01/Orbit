@@ -220,6 +220,74 @@ func ufwAvailable() bool {
         return err == nil
 }
 
+// ── nftables / iptables fallback helpers ─────────────────────────────────────
+
+func nftAvailable() bool {
+        _, err := exec.LookPath("nft")
+        return err == nil
+}
+
+func nftEnabled() bool {
+        if !nftAvailable() {
+                return false
+        }
+        out, err := exec.Command("nft", "list", "ruleset").Output()
+        if err != nil {
+                return false
+        }
+        return len(strings.TrimSpace(string(out))) > 0
+}
+
+func iptablesAvailable() bool {
+        _, err := exec.LookPath("iptables")
+        return err == nil
+}
+
+func iptablesEnabled() bool {
+        if !iptablesAvailable() {
+                return false
+        }
+        out, err := exec.Command("iptables", "-L", "-n").Output()
+        if err != nil {
+                return false
+        }
+        // If there are DROP or REJECT rules, consider it active
+        return strings.Contains(string(out), "DROP") || strings.Contains(string(out), "REJECT")
+}
+
+func detectFirewallBackend() string {
+        if ufwAvailable() {
+                return ufwVersion()
+        }
+        if nftAvailable() {
+                out, _ := exec.Command("nft", "--version").Output()
+                v := strings.TrimSpace(string(out))
+                if fields := strings.Fields(v); len(fields) >= 2 {
+                        return "nftables " + fields[1]
+                }
+                return "nftables"
+        }
+        if iptablesAvailable() {
+                out, _ := exec.Command("iptables", "--version").Output()
+                v := strings.TrimSpace(string(out))
+                if v != "" {
+                        return v
+                }
+                return "iptables"
+        }
+        return "none"
+}
+
+func detectFirewallEnabled() bool {
+        if ufwAvailable() {
+                return ufwEnabled()
+        }
+        if nftEnabled() {
+                return true
+        }
+        return iptablesEnabled()
+}
+
 func ufwEnabled() bool {
         if !ufwAvailable() {
                 return false
@@ -564,9 +632,10 @@ func (s *Server) fwMaxOrder(ctx context.Context) int {
 func (s *Server) handleFirewallStatus(w http.ResponseWriter, r *http.Request) {
         ctx := r.Context()
 
-        // UFW status
-        isEnabled := ufwEnabled()
-        if !ufwAvailable() {
+        // Firewall status — detect actual backend (UFW / nftables / iptables)
+        isEnabled := detectFirewallEnabled()
+        if !ufwAvailable() && !nftAvailable() && !iptablesAvailable() {
+                // No known firewall binary: fall back to stored DB state
                 var val string
                 s.db.SQL.QueryRowContext(ctx, `SELECT value FROM fw_state WHERE key='enabled'`).Scan(&val) //nolint:errcheck
                 isEnabled = val != "false"
@@ -586,7 +655,7 @@ func (s *Server) handleFirewallStatus(w http.ResponseWriter, r *http.Request) {
         }
 
         status := FWStatus{
-                Backend:        ufwVersion(),
+                Backend:        detectFirewallBackend(),
                 Status:         map[bool]string{true: "active", false: "inactive"}[isEnabled],
                 IPv6:           ufwIPv6Enabled(),
                 DefaultIn:      defaultIn,

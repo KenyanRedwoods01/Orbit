@@ -9,7 +9,8 @@ import (
         "os"
         "path/filepath"
         "strconv"
-            "time"
+        "strings"
+        "time"
 )
 
 // ── Certificate Management ────────────────────────────────────────────────────
@@ -398,8 +399,19 @@ func (s *Server) handleCertSelfSigned(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "domain is required", http.StatusBadRequest)
                 return
         }
+        // Sanitize domain: must not contain path separators or traversal sequences
+        if strings.ContainsAny(req.Domain, "/\\") || strings.Contains(req.Domain, "..") {
+                http.Error(w, "invalid domain name", http.StatusBadRequest)
+                return
+        }
         if req.OutDir == "" {
                 req.OutDir = "/etc/orbit/certs/" + req.Domain
+        }
+        // Validate output directory stays within expected base
+        req.OutDir = filepath.Clean(req.OutDir)
+        if !strings.HasPrefix(req.OutDir, "/etc/orbit/certs/") && !strings.HasPrefix(req.OutDir, "/etc/letsencrypt/") {
+                http.Error(w, "invalid output directory", http.StatusBadRequest)
+                return
         }
         if req.Days == 0 {
                 req.Days = 365

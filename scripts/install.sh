@@ -203,6 +203,11 @@ create_user() {
   else
     ok "  User '$ORBIT_USER' already exists"
   fi
+
+  # Add orbit to the docker group so it can manage containers without sudo
+  if getent group docker &>/dev/null; then
+    usermod -aG docker "$ORBIT_USER" 2>/dev/null && ok "  Added $ORBIT_USER to docker group" || true
+  fi
 }
 
 # ── Directories ───────────────────────────────────────────────────────────────
@@ -221,8 +226,9 @@ download_binary() {
   local dl_url
   if [[ "$ORBIT_VERSION" == "latest" ]]; then
     local latest_tag
-    latest_tag="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-                  | grep '"tag_name"' | cut -d'"' -f4)"
+    # Use /releases (not /releases/latest) so pre-releases are included
+    latest_tag="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases" \
+                  | grep '"tag_name"' | head -1 | cut -d'"' -f4)"
     [[ -n "$latest_tag" ]] || die "Could not determine latest version from GitHub API."
     ORBIT_VERSION="$latest_tag"
     info "  Resolved latest -> ${ORBIT_VERSION}"
@@ -319,6 +325,7 @@ Wants=network-online.target
 Type=simple
 User=${ORBIT_USER}
 Group=${ORBIT_GROUP}
+SupplementaryGroups=docker
 ExecStart=${BIN_DIR}/orbit --config ${CONFIG_DIR}/orbit.toml
 Restart=on-failure
 RestartSec=5s
