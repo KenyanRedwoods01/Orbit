@@ -939,6 +939,12 @@ export interface MCPAuditEntry {
 }
 export const fetchMCPAuditLog = () => request<MCPAuditEntry[]>('/mcp/audit')
 
+export interface MCPStats {
+  rate_limit_hits_24h: number
+  scope_denials_today: number
+}
+export const fetchMCPStats = () => request<MCPStats>('/mcp/stats')
+
 // ---- FTP ----
 
 export interface FtpUserApi {
@@ -2284,14 +2290,33 @@ export function testSettingsNotification(channel: 'email' | 'slack' | 'webhook')
   })
 }
 
+// ---- Settings: List All Releases ----
+
+export interface ReleaseInfo {
+  tag_name: string
+  name: string
+  html_url: string
+  body: string
+  published_at: string
+  is_current: boolean
+  is_latest: boolean
+  prerelease: boolean
+}
+
+export function fetchSettingsReleases() {
+  return request<ReleaseInfo[]>('/settings/releases')
+}
+
 // ---- Settings: Check Updates ----
 
 export interface UpdateCheckResult {
   current_version: string
   latest_version: string
+  release_name: string
   up_to_date: boolean
   release_url: string
   release_notes: string
+  release_date: string
   checked_at: number
 }
 

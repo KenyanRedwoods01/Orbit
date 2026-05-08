@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -75,33 +75,12 @@ function getC(name: string) {
   }
 }
 
-// ── Mock open-files for demo ──────────────────────────────────
-function mockFiles(pid: number, name: string) {
-  const stdX = [
-    { fd: 0, type: 'FILE', path: '/dev/null' },
-    { fd: 1, type: 'PIPE', path: `pipe:[${50000 + pid}]` },
-    { fd: 2, type: 'PIPE', path: `pipe:[${50001 + pid}]` },
-    { fd: 3, type: 'SOCK', path: `socket:[${40000 + pid}]` },
-  ]
-  const extras: Array<{ fd: number; type: string; path: string }> = []
-  if (name === 'nginx')    extras.push({ fd: 4, type: 'FILE', path: '/var/log/nginx/access.log' }, { fd: 5, type: 'FILE', path: '/var/log/nginx/error.log' }, { fd: 6, type: 'SOCK', path: `socket:[${40010 + pid}]` })
-  if (name === 'postgres') extras.push({ fd: 4, type: 'FILE', path: '/var/lib/postgresql/15/main/PG_VERSION' }, { fd: 5, type: 'SOCK', path: `socket:[${40020 + pid}]` })
-  if (name === 'node')     extras.push({ fd: 4, type: 'FILE', path: '/app/server.js' }, { fd: 5, type: 'SOCK', path: `socket:[${40030 + pid}]` }, { fd: 6, type: 'SOCK', path: `socket:[${40031 + pid}]` })
-  if (name === 'redis')    extras.push({ fd: 4, type: 'FILE', path: '/var/lib/redis/dump.rdb' }, { fd: 5, type: 'SOCK', path: `socket:[${40040 + pid}]` })
-  return [...stdX, ...extras].slice(0, 8)
-}
-
-// ── Mock env vars ─────────────────────────────────────────────
-function mockEnv(name: string) {
-  return [
-    { k: 'PATH',    v: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' },
-    { k: 'HOME',    v: name === 'postgres' ? '/var/lib/postgresql' : '/root' },
-    { k: 'USER',    v: name === 'nginx' ? 'www-data' : name === 'postgres' ? 'postgres' : 'root' },
-    { k: 'LANG',    v: 'en_US.UTF-8' },
-    { k: 'NODE_ENV',v: 'production' },
-    { k: 'PORT',    v: '3000' },
-    { k: 'TERM',    v: 'xterm-256color' },
-  ]
+// ── Infer file descriptor type from path ───────────────────────
+function inferFdType(path: string): string {
+  if (path.startsWith('socket:') || path.startsWith('TCP:') || path.startsWith('UDP:')) return 'SOCK'
+  if (path.startsWith('pipe:') || path.startsWith('pipe:[')) return 'PIPE'
+  if (path.startsWith('anon_inode:')) return 'ANON'
+  return 'FILE'
 }
 
 // ── Tooltip components ────────────────────────────────────────
@@ -152,6 +131,21 @@ export default function ProcessDetailPage() {
 
   const [envOpen,   setEnvOpen]   = useState(false)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
+  const [openFiles, setOpenFiles] = useState<Array<{ fd: number; path: string }>>([])
+  const [envVars,   setEnvVars]   = useState<Array<{ k: string; v: string }>>([])
+
+  // Fetch real open-files and env vars when pid changes
+  useEffect(() => {
+    if (!pidNum) return
+    fetch(`/api/processes/${pidNum}/files`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.open_files) setOpenFiles(d.open_files) })
+      .catch(() => {})
+    fetch(`/api/processes/${pidNum}/environ`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.vars) setEnvVars(d.vars) })
+      .catch(() => {})
+  }, [pidNum])
 
   const sendSignal = (sig: string) => {
     setActionMsg(`Signal ${sig} sent to PID ${pidNum} (no-op — backend offline)`)
@@ -167,10 +161,9 @@ export default function ProcessDetailPage() {
     )
   }
 
-  const c       = getC(proc.name)
-  const files   = mockFiles(proc.pid, proc.name)
-  const envVars = mockEnv(proc.name)
-  const lastH   = history[history.length - 1]
+  const c     = getC(proc.name)
+  const files = openFiles.map(f => ({ fd: f.fd, type: inferFdType(f.path), path: f.path }))
+  const lastH = history[history.length - 1]
   const uptimeStr = '5d 2h 14m'
 
   return (

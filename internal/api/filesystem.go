@@ -619,6 +619,10 @@ func (s *Server) handleFSExtract(w http.ResponseWriter, r *http.Request) {
                 defer r2.Close()
                 for _, f := range r2.File {
                         dest := filepath.Join(outPath, f.Name)
+                        // Zip-slip protection: dest must stay within outPath
+                        if !strings.HasPrefix(filepath.Clean(dest)+string(os.PathSeparator), filepath.Clean(outPath)+string(os.PathSeparator)) {
+                                continue
+                        }
                         if f.FileInfo().IsDir() {
                                 os.MkdirAll(dest, f.Mode()) //nolint:errcheck
                                 continue
@@ -668,6 +672,11 @@ func (s *Server) handleFSExtract(w http.ResponseWriter, r *http.Request) {
                                 break
                         }
                         dest := filepath.Join(outPath, hdr.Name)
+                        // Zip-slip protection: dest must stay within outPath
+                        if !strings.HasPrefix(filepath.Clean(dest)+string(os.PathSeparator), filepath.Clean(outPath)+string(os.PathSeparator)) {
+                                extractErr = fmt.Errorf("archive contains invalid path: %s", hdr.Name)
+                                break
+                        }
                         if hdr.FileInfo().IsDir() {
                                 os.MkdirAll(dest, hdr.FileInfo().Mode()) //nolint:errcheck
                                 continue

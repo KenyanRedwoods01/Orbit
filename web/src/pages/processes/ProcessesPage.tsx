@@ -385,7 +385,6 @@ export default function ProcessesPage() {
             Process Manager
           </div>
           <span className={styles.countBadge}>{filtered.length} processes</span>
-          <span className={styles.demoBadge}>Demo</span>
         </div>
         <div className={styles.headerRight}>
           <button className={styles.headerBtn} onClick={() => exportCSV(filtered)} title="Export filtered as CSV">

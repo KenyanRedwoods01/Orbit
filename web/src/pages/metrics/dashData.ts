@@ -36,6 +36,11 @@ export interface TimelineEvent {
   server: string
   details: string
   user: string
+  _rawTs?: number
+  _method?: string
+  _path?: string
+  _status?: number
+  _ip?: string
 }
 
 export interface ContainerStat {

@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  fetchMCPTokens, createMCPToken, revokeMCPToken,
-  type MCPToken as ApiMCPToken,
+  fetchMCPTokens, createMCPToken, revokeMCPToken, fetchMCPAuditLog, fetchMCPStats,
+  type MCPToken as ApiMCPToken, type MCPAuditEntry,
 } from '../../lib/api'
 import s from './McpPage.module.css'
 
@@ -82,24 +82,6 @@ const ALL_SCOPES = [
   { group: 'Processes',items: [{ name: 'processes:read', desc: 'View processes' }, { name: 'processes:kill', desc: 'Kill processes' }] },
   { group: 'Uptime',   items: [{ name: 'uptime:read', desc: 'View uptime data' }] },
 ]
-const AUDIT_EVENTS = [
-  { time: '2026-05-03 14:32:11', action: 'TOKEN_USED',    detail: 'GET /api/metrics',           ip: '192.168.1.10', ok: true },
-  { time: '2026-05-03 14:31:44', action: 'TOKEN_USED',    detail: 'GET /api/servers',           ip: '192.168.1.10', ok: true },
-  { time: '2026-05-03 14:30:02', action: 'RATE_LIMITED',  detail: 'Burst limit exceeded',       ip: '192.168.1.10', ok: false },
-  { time: '2026-05-03 13:55:18', action: 'TOKEN_USED',    detail: 'POST /api/services/restart', ip: '192.168.1.10', ok: true },
-  { time: '2026-05-03 12:10:07', action: 'SCOPE_DENIED',  detail: 'deploy:write not permitted', ip: '10.0.0.55',    ok: false },
-  { time: '2026-05-03 11:00:00', action: 'TOKEN_ROTATED', detail: 'Manual rotation by admin',   ip: '203.0.113.1',  ok: true },
-  { time: '2026-05-03 08:00:00', action: 'TOKEN_USED',    detail: 'GET /api/logs/tail',         ip: '192.168.1.10', ok: true },
-  { time: '2026-05-02 22:00:00', action: 'TOKEN_CREATED', detail: 'Created by admin',           ip: '203.0.113.1',  ok: true },
-]
-const USAGE_ENDPOINTS = [
-  { path: '/api/metrics',          count: 8210, pct: 100 },
-  { path: '/api/servers',          count: 2341, pct: 29 },
-  { path: '/api/logs/tail',        count: 1102, pct: 13 },
-  { path: '/api/services',         count: 432,  pct: 5 },
-  { path: '/api/processes',        count: 263,  pct: 3 },
-]
-const USAGE_BARS = [12, 28, 45, 33, 60, 55, 80, 72, 90, 65, 40, 30, 55, 70, 88, 75, 60, 45, 55, 68, 82, 90, 78, 65]
 
 // ── SVG Icons (no emoji) ───────────────────────────────────────
 function IcoKey()    { return <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="7" r="3"/><path d="M9 7h6M13 7v2"/></svg> }
@@ -341,23 +323,12 @@ function UsageAnalyticsModal({ token, onClose }: { token: MCPToken; onClose(): v
     <Modal title={`Usage Analytics — ${token.name}`} onClose={onClose} size="lg" footer={<button className={`${s.btn} ${s.btnSecondary}`} onClick={onClose}>Close</button>}>
       <div className={s.usageGrid}>
         <div className={s.usageStat}><span className={s.usageStatLabel}>Total Requests</span><span className={s.usageStatValue}>{fmt(token.totalRequests)}</span></div>
-        <div className={s.usageStat}><span className={s.usageStatLabel}>Last 24h</span><span className={s.usageStatValue}>{fmt(Math.floor(token.totalRequests * 0.08))}</span></div>
-        <div className={s.usageStat}><span className={s.usageStatLabel}>Rate Limit Hits</span><span className={s.usageStatValue}>23</span></div>
-        <div className={s.usageStat}><span className={s.usageStatLabel}>Error Rate</span><span className={s.usageStatValue}>0.4%</span></div>
+        <div className={s.usageStat}><span className={s.usageStatLabel}>Status</span><span className={s.usageStatValue}>{token.status}</span></div>
+        <div className={s.usageStat}><span className={s.usageStatLabel}>Rate Limit</span><span className={s.usageStatValue}>{token.rateLimit}/min</span></div>
+        <div className={s.usageStat}><span className={s.usageStatLabel}>Burst</span><span className={s.usageStatValue}>{token.burst}</span></div>
       </div>
-      <div className={s.field}><span className={s.label}>Requests (last 24h)</span>
-        <div className={s.sparkBar}>
-          {USAGE_BARS.map((h, i) => <div key={i} className={s.sparkBarItem} style={{height:`${h}%`}}/>)}
-        </div>
-      </div>
-      <div className={s.field}><span className={s.label}>Top Endpoints</span>
-        {USAGE_ENDPOINTS.map(ep => (
-          <div key={ep.path} className={s.endpointRow}>
-            <span className={s.endpointPath}>{ep.path}</span>
-            <div className={s.barTrack}><div className={s.barFill} style={{width:`${ep.pct}%`}}/></div>
-            <span className={s.endpointCount}>{fmt(ep.count)}</span>
-          </div>
-        ))}
+      <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--color-text-dim)', fontSize: 12 }}>
+        Detailed per-endpoint analytics are not yet available. Enable audit logging to collect usage metrics.
       </div>
     </Modal>
   )
@@ -365,15 +336,33 @@ function UsageAnalyticsModal({ token, onClose }: { token: MCPToken; onClose(): v
 
 // ── Audit Log modal ────────────────────────────────────────────
 function AuditLogModal({ token, onClose }: { token: MCPToken; onClose(): void }) {
+  const [entries, setEntries] = useState<MCPAuditEntry[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchMCPAuditLog()
+      .then(data => setEntries(data.filter(e => e.token_id === null || String(e.token_id) === token.id)))
+      .catch(() => setEntries([]))
+      .finally(() => setLoading(false))
+  }, [token.id])
+
+  function relTs(ts: number) {
+    return new Date(ts * 1000).toLocaleString()
+  }
+
   return (
     <Modal title={`Audit Log — ${token.name}`} onClose={onClose} size="xl" footer={<button className={`${s.btn} ${s.btnSecondary}`} onClick={onClose}>Close</button>}>
       <div className={s.auditList}>
-        {AUDIT_EVENTS.map((ev, i) => (
-          <div key={i} className={s.auditItem}>
-            <span className={s.auditTime}>{ev.time}</span>
-            <span className={`${s.auditAction} ${ev.ok ? s.auditSuccess : s.auditFail}`}>{ev.action}</span>
-            <span className={s.auditDetail}>{ev.detail}</span>
-            <span className={s.auditIp}>{ev.ip}</span>
+        {loading && <div style={{ padding: '24px', textAlign: 'center', color: 'var(--color-text-dim)', fontSize: 12 }}>Loading…</div>}
+        {!loading && entries.length === 0 && (
+          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--color-text-dim)', fontSize: 12 }}>No audit events recorded for this token yet.</div>
+        )}
+        {entries.map(ev => (
+          <div key={ev.id} className={s.auditItem}>
+            <span className={s.auditTime}>{relTs(ev.ts)}</span>
+            <span className={`${s.auditAction} ${s.auditSuccess}`}>{ev.tool}</span>
+            <span className={s.auditDetail}>{ev.args}</span>
+            <span className={s.auditIp}>{ev.result}</span>
           </div>
         ))}
       </div>
@@ -554,6 +543,7 @@ export default function McpPage() {
   const [tab, setTab] = useState<'tokens'|'server'|'clients'|'policies'|'compliance'>('tokens')
   const { data: rawTokens = [] } = useQuery({ queryKey: ['mcp-tokens'], queryFn: fetchMCPTokens })
   const tokens = useMemo(() => rawTokens.map((t, i) => apiTokenToUi(t, i)), [rawTokens])
+  const { data: mcpStats } = useQuery({ queryKey: ['mcp-stats'], queryFn: fetchMCPStats, staleTime: 30000 })
   const [tools, setTools] = useState<MCPTool[]>([])
   const [view, setView] = useState<'grid'|'list'>('grid')
   const [search, setSearch] = useState('')
@@ -621,8 +611,8 @@ export default function McpPage() {
   const statCards = [
     { label: 'Active Tokens', value: tokens.filter(t=>t.status==='active').length, sub: `${tokens.length} total`, accent: '#4a9eff' },
     { label: 'Total Requests', value: fmt(tokens.reduce((a,t)=>a+t.totalRequests,0)), sub: 'all time', accent: '#22c55e' },
-    { label: 'Rate Limit Hits', value: '23', sub: 'last 24h', accent: '#f59e0b' },
-    { label: 'Security Events', value: '5', sub: 'scope denials today', accent: '#ef4444' },
+    { label: 'Rate Limit Hits', value: mcpStats?.rate_limit_hits_24h ?? 0, sub: 'last 24h', accent: '#f59e0b' },
+    { label: 'Security Events', value: mcpStats?.scope_denials_today ?? 0, sub: 'scope denials today', accent: '#ef4444' },
   ]
 
   return (
