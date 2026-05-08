@@ -772,330 +772,402 @@ func (s *Server) handleSettingsAuditConfigPut(w http.ResponseWriter, r *http.Req
 // ── Notification Test ──────────────────────────────────────────────────────────
 
 func (s *Server) handleSettingsNotifTest(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Channel string `json:"channel"` // email | slack | webhook
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
+        var req struct {
+                Channel string `json:"channel"` // email | slack | webhook
+        }
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+                http.Error(w, "bad request", http.StatusBadRequest)
+                return
+        }
 
-	raw, _ := s.loadSetting("notif_config")
-	cfg := loadJSON(raw, defaultNotifConfig())
+        raw, _ := s.loadSetting("notif_config")
+        cfg := loadJSON(raw, defaultNotifConfig())
 
-	var testErr string
-	switch req.Channel {
-	case "email":
-		if cfg.SMTPHost == "" {
-			testErr = "SMTP host not configured"
-		} else {
-			testErr = s.testEmailNotification(cfg)
-		}
-	case "slack":
-		if cfg.SlackWebhook == "" {
-			testErr = "Slack webhook URL not configured"
-		} else {
-			testErr = s.testSlackNotification(cfg)
-		}
-	case "webhook":
-		if cfg.WebhookURL == "" {
-			testErr = "Webhook URL not configured"
-		} else {
-			testErr = s.testWebhookNotification(cfg)
-		}
-	default:
-		http.Error(w, "unknown channel", http.StatusBadRequest)
-		return
-	}
+        var testErr string
+        switch req.Channel {
+        case "email":
+                if cfg.SMTPHost == "" {
+                        testErr = "SMTP host not configured"
+                } else {
+                        testErr = s.testEmailNotification(cfg)
+                }
+        case "slack":
+                if cfg.SlackWebhook == "" {
+                        testErr = "Slack webhook URL not configured"
+                } else {
+                        testErr = s.testSlackNotification(cfg)
+                }
+        case "webhook":
+                if cfg.WebhookURL == "" {
+                        testErr = "Webhook URL not configured"
+                } else {
+                        testErr = s.testWebhookNotification(cfg)
+                }
+        default:
+                http.Error(w, "unknown channel", http.StatusBadRequest)
+                return
+        }
 
-	w.Header().Set("Content-Type", "application/json")
-	if testErr != "" {
-		w.WriteHeader(http.StatusBadGateway)
-		json.NewEncoder(w).Encode(map[string]string{"error": testErr}) //nolint:errcheck
-		return
-	}
-	json.NewEncoder(w).Encode(map[string]bool{"ok": true}) //nolint:errcheck
+        w.Header().Set("Content-Type", "application/json")
+        if testErr != "" {
+                w.WriteHeader(http.StatusBadGateway)
+                json.NewEncoder(w).Encode(map[string]string{"error": testErr}) //nolint:errcheck
+                return
+        }
+        json.NewEncoder(w).Encode(map[string]bool{"ok": true}) //nolint:errcheck
 }
 
 func (s *Server) testEmailNotification(cfg NotifConfig) string {
-	port := cfg.SMTPPort
-	if port == "" {
-		port = "587"
-	}
-	addr := cfg.SMTPHost + ":" + port
-	to := cfg.SMTPFrom
-	if to == "" {
-		return "From address not configured"
-	}
-	subject := "Orbit VPS — Test Notification"
-	body := "This is a test notification from Orbit VPS.\r\n\r\nIf you received this, your email notifications are configured correctly."
-	msg := []byte("To: " + to + "\r\nFrom: " + cfg.SMTPFromName + " <" + cfg.SMTPFrom + ">\r\nSubject: " + subject + "\r\n\r\n" + body)
+        port := cfg.SMTPPort
+        if port == "" {
+                port = "587"
+        }
+        addr := cfg.SMTPHost + ":" + port
+        to := cfg.SMTPFrom
+        if to == "" {
+                return "From address not configured"
+        }
+        subject := "Orbit VPS — Test Notification"
+        body := "This is a test notification from Orbit VPS.\r\n\r\nIf you received this, your email notifications are configured correctly."
+        msg := []byte("To: " + to + "\r\nFrom: " + cfg.SMTPFromName + " <" + cfg.SMTPFrom + ">\r\nSubject: " + subject + "\r\n\r\n" + body)
 
-	if cfg.SMTPTLS {
-		tlsCfg := &tls.Config{ServerName: cfg.SMTPHost, InsecureSkipVerify: !cfg.SMTPVerifySSL} //nolint:gosec
-		conn, dialErr := tls.Dial("tcp", addr, tlsCfg)
-		if dialErr != nil {
-			// fallback to STARTTLS
-			smtpClient, err := smtp.Dial(addr)
-			if err != nil {
-				return "Connection failed: " + err.Error()
-			}
-			defer smtpClient.Close()
-			if err2 := smtpClient.StartTLS(tlsCfg); err2 != nil {
-				return "STARTTLS failed: " + err2.Error()
-			}
-			if cfg.SMTPUsername != "" {
-				auth := smtp.PlainAuth("", cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPHost)
-				if err3 := smtpClient.Auth(auth); err3 != nil {
-					return "Auth failed: " + err3.Error()
-				}
-			}
-			if err4 := smtpClient.Mail(cfg.SMTPFrom); err4 != nil {
-				return "MAIL FROM error: " + err4.Error()
-			}
-			if err5 := smtpClient.Rcpt(to); err5 != nil {
-				return "RCPT TO error: " + err5.Error()
-			}
-			wc, _ := smtpClient.Data()
-			wc.Write(msg) //nolint:errcheck
-			wc.Close()    //nolint:errcheck
-			return ""
-		}
-		defer conn.Close()
-		client, clientErr := smtp.NewClient(conn, cfg.SMTPHost)
-		if clientErr != nil {
-			return "SMTP client error: " + clientErr.Error()
-		}
-		defer client.Close()
-		if cfg.SMTPUsername != "" {
-			auth := smtp.PlainAuth("", cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPHost)
-			if err := client.Auth(auth); err != nil {
-				return "Auth failed: " + err.Error()
-			}
-		}
-		if err := client.Mail(cfg.SMTPFrom); err != nil {
-			return "MAIL FROM error: " + err.Error()
-		}
-		if err := client.Rcpt(to); err != nil {
-			return "RCPT TO error: " + err.Error()
-		}
-		wc, wcErr := client.Data()
-		if wcErr != nil {
-			return "DATA error: " + wcErr.Error()
-		}
-		wc.Write(msg) //nolint:errcheck
-		wc.Close()    //nolint:errcheck
-	} else {
-		var sendErr error
-		if cfg.SMTPUsername != "" {
-			auth := smtp.PlainAuth("", cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPHost)
-			sendErr = smtp.SendMail(addr, auth, cfg.SMTPFrom, []string{to}, msg)
-		} else {
-			sendErr = smtp.SendMail(addr, nil, cfg.SMTPFrom, []string{to}, msg)
-		}
-		if sendErr != nil {
-			return "Send failed: " + sendErr.Error()
-		}
-	}
-	return ""
+        if cfg.SMTPTLS {
+                tlsCfg := &tls.Config{ServerName: cfg.SMTPHost, InsecureSkipVerify: !cfg.SMTPVerifySSL} //nolint:gosec
+                conn, dialErr := tls.Dial("tcp", addr, tlsCfg)
+                if dialErr != nil {
+                        // fallback to STARTTLS
+                        smtpClient, err := smtp.Dial(addr)
+                        if err != nil {
+                                return "Connection failed: " + err.Error()
+                        }
+                        defer smtpClient.Close()
+                        if err2 := smtpClient.StartTLS(tlsCfg); err2 != nil {
+                                return "STARTTLS failed: " + err2.Error()
+                        }
+                        if cfg.SMTPUsername != "" {
+                                auth := smtp.PlainAuth("", cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPHost)
+                                if err3 := smtpClient.Auth(auth); err3 != nil {
+                                        return "Auth failed: " + err3.Error()
+                                }
+                        }
+                        if err4 := smtpClient.Mail(cfg.SMTPFrom); err4 != nil {
+                                return "MAIL FROM error: " + err4.Error()
+                        }
+                        if err5 := smtpClient.Rcpt(to); err5 != nil {
+                                return "RCPT TO error: " + err5.Error()
+                        }
+                        wc, _ := smtpClient.Data()
+                        wc.Write(msg) //nolint:errcheck
+                        wc.Close()    //nolint:errcheck
+                        return ""
+                }
+                defer conn.Close()
+                client, clientErr := smtp.NewClient(conn, cfg.SMTPHost)
+                if clientErr != nil {
+                        return "SMTP client error: " + clientErr.Error()
+                }
+                defer client.Close()
+                if cfg.SMTPUsername != "" {
+                        auth := smtp.PlainAuth("", cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPHost)
+                        if err := client.Auth(auth); err != nil {
+                                return "Auth failed: " + err.Error()
+                        }
+                }
+                if err := client.Mail(cfg.SMTPFrom); err != nil {
+                        return "MAIL FROM error: " + err.Error()
+                }
+                if err := client.Rcpt(to); err != nil {
+                        return "RCPT TO error: " + err.Error()
+                }
+                wc, wcErr := client.Data()
+                if wcErr != nil {
+                        return "DATA error: " + wcErr.Error()
+                }
+                wc.Write(msg) //nolint:errcheck
+                wc.Close()    //nolint:errcheck
+        } else {
+                var sendErr error
+                if cfg.SMTPUsername != "" {
+                        auth := smtp.PlainAuth("", cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPHost)
+                        sendErr = smtp.SendMail(addr, auth, cfg.SMTPFrom, []string{to}, msg)
+                } else {
+                        sendErr = smtp.SendMail(addr, nil, cfg.SMTPFrom, []string{to}, msg)
+                }
+                if sendErr != nil {
+                        return "Send failed: " + sendErr.Error()
+                }
+        }
+        return ""
 }
 
 func (s *Server) testSlackNotification(cfg NotifConfig) string {
-	channel := cfg.SlackChannel
-	if channel == "" {
-		channel = "#alerts"
-	}
-	username := cfg.SlackUsername
-	if username == "" {
-		username = "Orbit VPS"
-	}
-	payload := `{"channel":"` + channel + `","username":"` + username + `","text":"*Orbit VPS Test* — your Slack integration is configured correctly.","icon_emoji":":white_check_mark:"}`
-	resp, err := doHTTPPost(cfg.SlackWebhook, "application/json", payload)
-	if err != nil {
-		return "Request failed: " + err.Error()
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Sprintf("Slack returned HTTP %d", resp.StatusCode)
-	}
-	return ""
+        channel := cfg.SlackChannel
+        if channel == "" {
+                channel = "#alerts"
+        }
+        username := cfg.SlackUsername
+        if username == "" {
+                username = "Orbit VPS"
+        }
+        payload := `{"channel":"` + channel + `","username":"` + username + `","text":"*Orbit VPS Test* — your Slack integration is configured correctly.","icon_emoji":":white_check_mark:"}`
+        resp, err := doHTTPPost(cfg.SlackWebhook, "application/json", payload)
+        if err != nil {
+                return "Request failed: " + err.Error()
+        }
+        defer resp.Body.Close()
+        if resp.StatusCode != 200 {
+                return fmt.Sprintf("Slack returned HTTP %d", resp.StatusCode)
+        }
+        return ""
 }
 
 func (s *Server) testWebhookNotification(cfg NotifConfig) string {
-	payload := `{"event":"test","source":"orbit-vps","message":"Test notification from Orbit VPS","timestamp":"` + time.Now().UTC().Format(time.RFC3339) + `"}`
-	method := cfg.WebhookMethod
-	if method == "" {
-		method = "POST"
-	}
-	resp, err := doHTTPRequest(method, cfg.WebhookURL, "application/json", payload)
-	if err != nil {
-		return "Request failed: " + err.Error()
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Sprintf("Webhook returned HTTP %d", resp.StatusCode)
-	}
-	return ""
+        payload := `{"event":"test","source":"orbit-vps","message":"Test notification from Orbit VPS","timestamp":"` + time.Now().UTC().Format(time.RFC3339) + `"}`
+        method := cfg.WebhookMethod
+        if method == "" {
+                method = "POST"
+        }
+        resp, err := doHTTPRequest(method, cfg.WebhookURL, "application/json", payload)
+        if err != nil {
+                return "Request failed: " + err.Error()
+        }
+        defer resp.Body.Close()
+        if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+                return fmt.Sprintf("Webhook returned HTTP %d", resp.StatusCode)
+        }
+        return ""
 }
 
 func doHTTPPost(url, contentType, body string) (*http.Response, error) {
-	return doHTTPRequest("POST", url, contentType, body)
+        return doHTTPRequest("POST", url, contentType, body)
 }
 
 func doHTTPRequest(method, url, contentType, body string) (*http.Response, error) {
-	req, err := http.NewRequest(method, url, strings.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", contentType)
-	client := &http.Client{Timeout: 10 * time.Second}
-	return client.Do(req)
+        req, err := http.NewRequest(method, url, strings.NewReader(body))
+        if err != nil {
+                return nil, err
+        }
+        req.Header.Set("Content-Type", contentType)
+        client := &http.Client{Timeout: 10 * time.Second}
+        return client.Do(req)
 }
 
 // ── Backup File Actions ────────────────────────────────────────────────────────
 
 func (s *Server) handleSettingsBackupFileDelete(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	// Try as backup_run integer ID
-	if runID, err := strconv.ParseInt(id, 10, 64); err == nil {
-		s.db.SQL.ExecContext(r.Context(), `DELETE FROM backup_runs WHERE id = ?`, runID) //nolint:errcheck
-	}
-	// Also try to delete local file if it exists
-	raw, _ := s.loadSetting("backup_settings")
-	bsCfg := loadJSON(raw, defaultBackupConfigSettings())
-	if bsCfg.LocalDir != "" {
-		candidate := filepath.Join(bsCfg.LocalDir, filepath.Base(id))
-		os.Remove(candidate) //nolint:errcheck
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"ok": true}) //nolint:errcheck
+        id := r.PathValue("id")
+        // Try as backup_run integer ID
+        if runID, err := strconv.ParseInt(id, 10, 64); err == nil {
+                s.db.SQL.ExecContext(r.Context(), `DELETE FROM backup_runs WHERE id = ?`, runID) //nolint:errcheck
+        }
+        // Also try to delete local file if it exists
+        raw, _ := s.loadSetting("backup_settings")
+        bsCfg := loadJSON(raw, defaultBackupConfigSettings())
+        if bsCfg.LocalDir != "" {
+                candidate := filepath.Join(bsCfg.LocalDir, filepath.Base(id))
+                os.Remove(candidate) //nolint:errcheck
+        }
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]bool{"ok": true}) //nolint:errcheck
 }
 
 func (s *Server) handleSettingsBackupFileRestore(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	var req struct {
-		Components     []string `json:"components"`
-		ConflictResolve string  `json:"conflict"`
-	}
-	json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck
+        id := r.PathValue("id")
+        var req struct {
+                Components     []string `json:"components"`
+                ConflictResolve string  `json:"conflict"`
+        }
+        json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck
 
-	// Mark the run as restored in metadata
-	if runID, err := strconv.ParseInt(id, 10, 64); err == nil {
-		s.db.SQL.ExecContext(r.Context(), //nolint:errcheck
-			`UPDATE backup_runs SET output = COALESCE(output,'') || ' [restored at `+time.Now().UTC().Format(time.RFC3339)+`]' WHERE id = ?`, runID)
-	}
+        // Mark the run as restored in metadata
+        if runID, err := strconv.ParseInt(id, 10, 64); err == nil {
+                s.db.SQL.ExecContext(r.Context(), //nolint:errcheck
+                        `UPDATE backup_runs SET output = COALESCE(output,'') || ' [restored at `+time.Now().UTC().Format(time.RFC3339)+`]' WHERE id = ?`, runID)
+        }
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
-		"ok":      true,
-		"message": "Restore completed. A server restart may be required for all changes to take effect.",
-	})
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+                "ok":      true,
+                "message": "Restore completed. A server restart may be required for all changes to take effect.",
+        })
 }
 
 func (s *Server) handleSettingsBackupFileDownload(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+        id := r.PathValue("id")
 
-	// Check local backup dir first
-	raw, _ := s.loadSetting("backup_settings")
-	bsCfg := loadJSON(raw, defaultBackupConfigSettings())
-	var filePath string
-	if bsCfg.LocalDir != "" {
-		candidate := filepath.Join(bsCfg.LocalDir, filepath.Base(id))
-		if _, err := os.Stat(candidate); err == nil {
-			filePath = candidate
-		}
-	}
+        // Check local backup dir first
+        raw, _ := s.loadSetting("backup_settings")
+        bsCfg := loadJSON(raw, defaultBackupConfigSettings())
+        var filePath string
+        if bsCfg.LocalDir != "" {
+                candidate := filepath.Join(bsCfg.LocalDir, filepath.Base(id))
+                if _, err := os.Stat(candidate); err == nil {
+                        filePath = candidate
+                }
+        }
 
-	if filePath == "" {
-		// Try to find by backup run ID
-		if runID, err := strconv.ParseInt(id, 10, 64); err == nil {
-			var outputPath string
-			s.db.SQL.QueryRowContext(r.Context(), `SELECT COALESCE(output,'') FROM backup_runs WHERE id = ?`, runID).Scan(&outputPath) //nolint:errcheck
-			if outputPath != "" {
-				// output may contain notes; look for a file path
-				for _, part := range strings.Fields(outputPath) {
-					if _, statErr := os.Stat(part); statErr == nil {
-						filePath = part
-						break
-					}
-				}
-			}
-		}
-	}
+        if filePath == "" {
+                // Try to find by backup run ID
+                if runID, err := strconv.ParseInt(id, 10, 64); err == nil {
+                        var outputPath string
+                        s.db.SQL.QueryRowContext(r.Context(), `SELECT COALESCE(output,'') FROM backup_runs WHERE id = ?`, runID).Scan(&outputPath) //nolint:errcheck
+                        if outputPath != "" {
+                                // output may contain notes; look for a file path
+                                for _, part := range strings.Fields(outputPath) {
+                                        if _, statErr := os.Stat(part); statErr == nil {
+                                                filePath = part
+                                                break
+                                        }
+                                }
+                        }
+                }
+        }
 
-	if filePath != "" {
-		w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(filePath)+`"`)
-		w.Header().Set("Content-Type", "application/octet-stream")
-		http.ServeFile(w, r, filePath)
-		return
-	}
+        if filePath != "" {
+                w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(filePath)+`"`)
+                w.Header().Set("Content-Type", "application/octet-stream")
+                http.ServeFile(w, r, filePath)
+                return
+        }
 
-	// Fallback: export current settings as JSON
-	rows, err := s.db.SQL.QueryContext(r.Context(), `SELECT key, value FROM settings ORDER BY key`)
-	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-	defer rows.Close()
-	allSettings := map[string]string{}
-	for rows.Next() {
-		var k, v string
-		rows.Scan(&k, &v) //nolint:errcheck
-		allSettings[k] = v
-	}
-	export := map[string]interface{}{
-		"exported_at": time.Now().UTC().Format(time.RFC3339),
-		"version":     "1",
-		"backup_id":   id,
-		"settings":    allSettings,
-	}
-	w.Header().Set("Content-Disposition", `attachment; filename="orbit-backup-`+id+`.json"`)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(export) //nolint:errcheck
+        // Fallback: export current settings as JSON
+        rows, err := s.db.SQL.QueryContext(r.Context(), `SELECT key, value FROM settings ORDER BY key`)
+        if err != nil {
+                http.Error(w, "not found", http.StatusNotFound)
+                return
+        }
+        defer rows.Close()
+        allSettings := map[string]string{}
+        for rows.Next() {
+                var k, v string
+                rows.Scan(&k, &v) //nolint:errcheck
+                allSettings[k] = v
+        }
+        export := map[string]interface{}{
+                "exported_at": time.Now().UTC().Format(time.RFC3339),
+                "version":     "1",
+                "backup_id":   id,
+                "settings":    allSettings,
+        }
+        w.Header().Set("Content-Disposition", `attachment; filename="orbit-backup-`+id+`.json"`)
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(export) //nolint:errcheck
+}
+
+// ── List All Releases ──────────────────────────────────────────────────────────
+
+func (s *Server) handleSettingsListReleases(w http.ResponseWriter, r *http.Request) {
+        type ghRelease struct {
+                TagName     string `json:"tag_name"`
+                Name        string `json:"name"`
+                HTMLURL     string `json:"html_url"`
+                Body        string `json:"body"`
+                PublishedAt string `json:"published_at"`
+                Draft       bool   `json:"draft"`
+                Prerelease  bool   `json:"prerelease"`
+        }
+
+        client := &http.Client{Timeout: 10 * time.Second}
+        resp, err := client.Get("https://api.github.com/repos/KenyanRedwoods01/Orbit/releases?per_page=30")
+        if err != nil || resp == nil || resp.StatusCode != 200 {
+                http.Error(w, "failed to fetch releases from GitHub", http.StatusBadGateway)
+                return
+        }
+        defer resp.Body.Close()
+
+        var ghReleases []ghRelease
+        if decErr := json.NewDecoder(resp.Body).Decode(&ghReleases); decErr != nil {
+                http.Error(w, "failed to parse releases", http.StatusInternalServerError)
+                return
+        }
+
+        currentVersion := "v0.1.0"
+        if v, err2 := s.loadSetting("version"); err2 == nil && v != "" {
+                currentVersion = v
+        }
+
+        type releaseInfo struct {
+                TagName     string `json:"tag_name"`
+                Name        string `json:"name"`
+                HTMLURL     string `json:"html_url"`
+                Body        string `json:"body"`
+                PublishedAt string `json:"published_at"`
+                IsCurrent   bool   `json:"is_current"`
+                IsLatest    bool   `json:"is_latest"`
+                Prerelease  bool   `json:"prerelease"`
+        }
+
+        result := make([]releaseInfo, 0, len(ghReleases))
+        for i, rel := range ghReleases {
+                if rel.Draft {
+                        continue
+                }
+                result = append(result, releaseInfo{
+                        TagName:     rel.TagName,
+                        Name:        rel.Name,
+                        HTMLURL:     rel.HTMLURL,
+                        Body:        rel.Body,
+                        PublishedAt: rel.PublishedAt,
+                        IsCurrent:   rel.TagName == currentVersion,
+                        IsLatest:    i == 0,
+                        Prerelease:  rel.Prerelease,
+                })
+        }
+
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(result) //nolint:errcheck
 }
 
 // ── Check Updates ──────────────────────────────────────────────────────────────
 
 func (s *Server) handleSettingsCheckUpdates(w http.ResponseWriter, r *http.Request) {
-	currentVersion := "v0.1.0"
-	if v, err := s.loadSetting("version"); err == nil && v != "" {
-		currentVersion = v
-	}
+        currentVersion := "v0.1.0"
+        if v, err := s.loadSetting("version"); err == nil && v != "" {
+                currentVersion = v
+        }
 
-	latestVersion := currentVersion
-	releaseURL := ""
-	releaseNotes := ""
-	upToDate := true
-	checkedAt := time.Now().Unix()
+        latestVersion := currentVersion
+        releaseName := ""
+        releaseURL := ""
+        releaseNotes := ""
+        releaseDate := ""
+        upToDate := true
+        checkedAt := time.Now().Unix()
 
-	type ghRelease struct {
-		TagName string `json:"tag_name"`
-		HTMLURL string `json:"html_url"`
-		Body    string `json:"body"`
-	}
+        type ghRelease struct {
+                TagName     string `json:"tag_name"`
+                Name        string `json:"name"`
+                HTMLURL     string `json:"html_url"`
+                Body        string `json:"body"`
+                PublishedAt string `json:"published_at"`
+        }
 
-	client := &http.Client{Timeout: 8 * time.Second}
-	resp, err := client.Get("https://api.github.com/repos/orbit-vps/orbit/releases/latest")
-	if err == nil && resp != nil && resp.StatusCode == 200 {
-		defer resp.Body.Close()
-		var rel ghRelease
-		if decErr := json.NewDecoder(resp.Body).Decode(&rel); decErr == nil && rel.TagName != "" {
-			latestVersion = rel.TagName
-			releaseURL = rel.HTMLURL
-			releaseNotes = rel.Body
-			upToDate = (latestVersion == currentVersion)
-		}
-	}
+        client := &http.Client{Timeout: 8 * time.Second}
+        resp, err := client.Get("https://api.github.com/repos/KenyanRedwoods01/Orbit/releases/latest")
+        if err == nil && resp != nil && resp.StatusCode == 200 {
+                defer resp.Body.Close()
+                var rel ghRelease
+                if decErr := json.NewDecoder(resp.Body).Decode(&rel); decErr == nil && rel.TagName != "" {
+                        latestVersion = rel.TagName
+                        releaseName = rel.Name
+                        releaseURL = rel.HTMLURL
+                        releaseNotes = rel.Body
+                        releaseDate = rel.PublishedAt
+                        upToDate = (latestVersion == currentVersion)
+                }
+        }
 
-	s.saveSetting("last_update_check", strconv.FormatInt(checkedAt, 10)) //nolint:errcheck
+        s.saveSetting("last_update_check", strconv.FormatInt(checkedAt, 10)) //nolint:errcheck
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
-		"current_version": currentVersion,
-		"latest_version":  latestVersion,
-		"up_to_date":      upToDate,
-		"release_url":     releaseURL,
-		"release_notes":   releaseNotes,
-		"checked_at":      checkedAt,
-	})
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+                "current_version": currentVersion,
+                "latest_version":  latestVersion,
+                "release_name":    releaseName,
+                "up_to_date":      upToDate,
+                "release_url":     releaseURL,
+                "release_notes":   releaseNotes,
+                "release_date":    releaseDate,
+                "checked_at":      checkedAt,
+        })
 }
