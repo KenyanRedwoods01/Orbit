@@ -1,6 +1,6 @@
 import { useState, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { login } from '@/lib/api'
+import { login, fetchCSRFToken } from '@/lib/api'
 import { useAuthStore } from '@/store/auth'
 import { Spinner } from '@/components/ui'
 import styles from './LoginPage.module.css'
@@ -161,6 +161,8 @@ export default function LoginPage() {
     try {
       const user = await login(username, password)
       setUser({ username: user.username, scope: user.scope })
+      // Fetch CSRF token bound to the new session
+      await fetchCSRFToken()
       navigate('/metrics', { replace: true })
     } catch {
       setError('Invalid username or password')

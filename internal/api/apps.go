@@ -7,12 +7,58 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+	"unicode"
 )
+
+// splitShellWords performs a simple POSIX-like word split on a command string,
+// handling single-quoted and double-quoted segments. This allows us to invoke
+// app install commands through exec.Command without passing them through a
+// shell interpreter, eliminating the sh -c injection vector (#1).
+func splitShellWords(s string) ([]string, error) {
+	const (
+		singleQuote = rune(39) // ASCII apostrophe / single-quote
+		doubleQuote = rune(34) // ASCII double-quote
+	)
+	var words []string
+	var word strings.Builder
+	inQuote := rune(0)
+
+	for _, ch := range s {
+		switch {
+		case inQuote != 0 && ch == inQuote:
+			// Closing quote
+			inQuote = 0
+		case inQuote != 0:
+			// Inside a quoted segment
+			word.WriteRune(ch)
+		case ch == singleQuote || ch == doubleQuote:
+			// Opening quote
+			inQuote = ch
+		case unicode.IsSpace(ch):
+			// Word boundary
+			if word.Len() > 0 {
+				words = append(words, word.String())
+				word.Reset()
+			}
+		default:
+			word.WriteRune(ch)
+		}
+	}
+	if inQuote != 0 {
+		return nil, fmt.Errorf("unterminated quote in install command")
+	}
+	if word.Len() > 0 {
+		words = append(words, word.String())
+	}
+	return words, nil
+}
 
 // ── App Registry ──────────────────────────────────────────────────────────────
 
@@ -678,7 +724,7 @@ func (s *Server) handleAppInstall(w http.ResponseWriter, r *http.Request) {
 		appInstallMu.Lock()
 		delete(appInstallQueue, appID)
 		appInstallMu.Unlock()
-		http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
 
@@ -709,15 +755,30 @@ func (s *Server) runAppInstall(appID string, def *ServerAppDef, port int) {
 
 	installLog := ""
 
-	// Build the final command (substitute port if needed)
-	cmd := def.InstallCommand
+	// Build the final command (substitute port if needed).
+	// Only integer port values are substituted – no arbitrary user data reaches
+	// the command string at this point, since def.InstallCommand is a compile-time
+	// constant and port is a validated integer (#1).
+	cmdStr := def.InstallCommand
 	if port != def.DefaultPort && def.DefaultPort > 0 {
-		cmd = strings.ReplaceAll(cmd, fmt.Sprintf("%d:%d", def.DefaultPort, def.DefaultPort), fmt.Sprintf("%d:%d", port, def.DefaultPort))
-		cmd = strings.ReplaceAll(cmd, fmt.Sprintf("-p %d:", def.DefaultPort), fmt.Sprintf("-p %d:", port))
+		cmdStr = strings.ReplaceAll(cmdStr,
+			fmt.Sprintf("%d:%d", def.DefaultPort, def.DefaultPort),
+			fmt.Sprintf("%d:%d", port, def.DefaultPort))
+		cmdStr = strings.ReplaceAll(cmdStr,
+			fmt.Sprintf("-p %d:", def.DefaultPort),
+			fmt.Sprintf("-p %d:", port))
 	}
 
-	c := exec.CommandContext(ctx, "sh", "-c", cmd)
-	out, err := c.CombinedOutput()
+	// Split into argv without a shell to avoid sh -c injection (#1).
+	argv, splitErr := splitShellWords(cmdStr)
+	var out []byte
+	var err error
+	if splitErr != nil || len(argv) == 0 {
+		// Fallback: treat as a single executable (no args) to avoid shell.
+		argv = []string{cmdStr}
+	}
+	c := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	out, err = c.CombinedOutput()
 	installLog = string(out)
 
 	if err != nil {
@@ -926,10 +987,20 @@ func (s *Server) handleAppPreflightCheck(w http.ResponseWriter, r *http.Request)
 		}(),
 	})
 
-	// Check RAM
-	memOut, _ := exec.CommandContext(ctx, "sh", "-c", "free -m | awk '/^Mem:/{print $2}'").Output()
+	// Check RAM via /proc/meminfo (no shell required)
 	totalRAMMB := 0
-	fmt.Sscanf(strings.TrimSpace(string(memOut)), "%d", &totalRAMMB)
+	if memData, err := os.ReadFile("/proc/meminfo"); err == nil {
+		for _, line := range strings.Split(string(memData), "\n") {
+			if strings.HasPrefix(line, "MemTotal:") {
+				fields := strings.Fields(line)
+				if len(fields) >= 2 {
+					fmt.Sscanf(fields[1], "%d", &totalRAMMB)
+					totalRAMMB /= 1024 // kB → MB
+				}
+				break
+			}
+		}
+	}
 	ramPassed := totalRAMMB == 0 || totalRAMMB >= def.MinRAMMB
 	checks = append(checks, checkResult{
 		Name:   fmt.Sprintf("Minimum RAM (%d MB)", def.MinRAMMB),
@@ -942,10 +1013,12 @@ func (s *Server) handleAppPreflightCheck(w http.ResponseWriter, r *http.Request)
 		}(),
 	})
 
-	// Check disk space
-	diskOut, _ := exec.CommandContext(ctx, "sh", "-c", "df -BG / | awk 'NR==2{print $4}' | sed 's/G//'").Output()
+	// Check disk space via statfs (no shell required)
 	diskGB := 0
-	fmt.Sscanf(strings.TrimSpace(string(diskOut)), "%d", &diskGB)
+	var st syscall.Statfs_t
+	if syscall.Statfs("/", &st) == nil {
+		diskGB = int(st.Bavail * uint64(st.Bsize) / (1024 * 1024 * 1024))
+	}
 	diskPassed := diskGB == 0 || diskGB >= def.MinDiskGB
 	checks = append(checks, checkResult{
 		Name:   fmt.Sprintf("Free Disk Space (%d GB)", def.MinDiskGB),
