@@ -26,12 +26,14 @@ import {
 } from '@/lib/api'
 import styles from './SettingsPage.module.css'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 // Simple markdown → HTML renderer for release notes
 function renderMarkdown(src: string): string {
   try {
     const result = marked.parse(src, { async: false })
-    return typeof result === 'string' ? result : ''
+    const html = typeof result === 'string' ? result : ''
+    return DOMPurify.sanitize(html)
   } catch {
     return src.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
   }

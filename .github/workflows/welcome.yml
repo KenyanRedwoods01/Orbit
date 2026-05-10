@@ -1,0 +1,39 @@
+name: Welcome first-time contributors
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  welcome:
+    name: Greet new contributor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/first-interaction@2ec0f0fd78838633cd1c1342e4536d49ef72be54 # v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: |
+            Thanks for opening your first issue! We appreciate your contribution.
+            Please make sure you've included as much detail as possible to help us
+            understand and address the problem.
+
+            - Check our [CONTRIBUTING.md](https://github.com/KenyanRedwoods01/Orbit/blob/main/CONTRIBUTING.md) for guidelines
+            - Search [existing issues](https://github.com/KenyanRedwoods01/Orbit/issues) before reporting duplicates
+            - Include logs, screenshots, or reproduction steps if applicable
+
+          pr-message: |
+            Thanks for opening your first pull request! We'll review it as soon as possible.
+
+            Before we merge, please ensure:
+            - Code passes all existing tests
+            - New features include appropriate tests
+            - Documentation is updated if needed
+            - The PR description clearly explains the change
+
+            Welcome to the Orbit community!

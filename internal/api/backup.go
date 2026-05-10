@@ -74,6 +74,15 @@ func (s *Server) handleBackupCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name, source_path, and dest_path are required", http.StatusBadRequest)
 		return
 	}
+	// Sandbox paths through safeRoot to prevent path traversal outside data dir.
+	if _, err := s.safeRoot(req.SourcePath); err != nil {
+		http.Error(w, "source_path: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, err := s.safeRoot(req.DestPath); err != nil {
+		http.Error(w, "dest_path: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 	if req.Retention == 0 {
 		req.Retention = 7
 	}
@@ -115,6 +124,18 @@ func (s *Server) handleBackupUpdate(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
+	}
+	if req.SourcePath != "" {
+		if _, err := s.safeRoot(req.SourcePath); err != nil {
+			http.Error(w, "source_path: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	if req.DestPath != "" {
+		if _, err := s.safeRoot(req.DestPath); err != nil {
+			http.Error(w, "dest_path: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	compressInt := 0
 	if req.Compress {
@@ -184,13 +205,26 @@ func (s *Server) triggerBackup(cfg backupConfig) int64 {
 	runID, _ := res.LastInsertId()
 
 	go func() {
+		// Validate paths at runtime as defense-in-depth
+		if _, err := s.safeRoot(cfg.SourcePath); err != nil {
+			now := time.Now().Unix()
+			s.db.SQL.Exec(`UPDATE backup_runs SET status='error', output=?, ended_at=? WHERE id=?`,
+				"source_path: "+err.Error(), now, runID)
+			return
+		}
+		if _, err := s.safeRoot(cfg.DestPath); err != nil {
+			now := time.Now().Unix()
+			s.db.SQL.Exec(`UPDATE backup_runs SET status='error', output=?, ended_at=? WHERE id=?`,
+				"dest_path: "+err.Error(), now, runID)
+			return
+		}
 		var out bytes.Buffer
 		var sizeBytes int64
 
 		if err := os.MkdirAll(cfg.DestPath, 0o755); err != nil {
 			now := time.Now().Unix()
 			s.db.SQL.Exec(`UPDATE backup_runs SET status='error', output=?, ended_at=? WHERE id=?`, //nolint:errcheck
-				"failed to create destination: "+err.Error(), now, runID)
+				"failed to create destination directory", now, runID)
 			return
 		}
 

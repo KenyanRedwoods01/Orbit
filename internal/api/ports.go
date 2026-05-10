@@ -728,7 +728,7 @@ func (s *Server) handlePortsRuleList(w http.ResponseWriter, r *http.Request) {
         s.ensurePortRulesTable()
         rows, err := s.db.SQL.Query(`SELECT id, port, protocol, action, source, comment, created_at, enabled FROM port_rules ORDER BY created_at DESC`)
         if err != nil {
-                http.Error(w, err.Error(), 500)
+                http.Error(w, "internal server error", 500)
                 return
         }
         defer rows.Close()
@@ -776,7 +776,7 @@ func (s *Server) handlePortsRuleCreate(w http.ResponseWriter, r *http.Request) {
         _, err := s.db.SQL.Exec(`INSERT INTO port_rules (id,port,protocol,action,source,comment,created_at,enabled) VALUES (?,?,?,?,?,?,?,1)`,
                 id, inp.Port, inp.Protocol, inp.Action, inp.Source, inp.Comment, now)
         if err != nil {
-                http.Error(w, err.Error(), 500)
+                http.Error(w, "internal server error", 500)
                 return
         }
 
@@ -803,7 +803,7 @@ func (s *Server) handlePortsRuleDelete(w http.ResponseWriter, r *http.Request) {
                 return
         }
         if err != nil {
-                http.Error(w, err.Error(), 500)
+                http.Error(w, "internal server error", 500)
                 return
         }
 
@@ -830,7 +830,7 @@ func (s *Server) handlePortsRuleToggle(w http.ResponseWriter, r *http.Request) {
                 return
         }
         if err != nil {
-                http.Error(w, err.Error(), 500)
+                http.Error(w, "internal server error", 500)
                 return
         }
 

@@ -1,0 +1,38 @@
+name: CI Failure Bot
+
+on:
+  workflow_run:
+    workflows: ["CI", "Security Scan", "Security Scan (Extended)"]
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+jobs:
+  handle-ci-result:
+    name: Create or close CI failure issue
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Handle CI failure
+        if: github.event.workflow_run.conclusion == 'failure'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        env:
+          BOT_ACTION: ci-failure
+        with:
+          script: |
+            const bot = require('.github/scripts/community-bot.js');
+            await bot({ github, context, core });
+
+      - name: Handle CI success (close failure issue)
+        if: github.event.workflow_run.conclusion == 'success'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        env:
+          BOT_ACTION: ci-success
+        with:
+          script: |
+            const bot = require('.github/scripts/community-bot.js');
+            await bot({ github, context, core });

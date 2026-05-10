@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -39,23 +40,34 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify agent secret matches server config
-	expectedSecret, _ := s.getSettingValue("agent_secret")
-	if expectedSecret != "" && req.Secret != expectedSecret {
+	// Verify agent secret matches server config (required)
+	expectedSecret, err := s.getSettingValue("agent_secret")
+	if err != nil || expectedSecret == "" {
+		http.Error(w, "agent registration is not configured; set agent_secret in settings first", http.StatusForbidden)
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(req.Secret), []byte(expectedSecret)) != 1 {
 		http.Error(w, "invalid agent secret", http.StatusUnauthorized)
 		return
 	}
 
-	// Generate a token for the agent
-	rawToken, err := generateRandomHex(32)
+	now := time.Now().Unix()
+
+	// Check if agent already exists — if so, re-register but suppress token
+	var existingID int64
+	s.db.SQL.QueryRowContext(r.Context(), `SELECT id FROM agents WHERE host=?`, req.Host).Scan(&existingID)
+
+	t, err := generateRandomHex(32)
 	if err != nil {
 		http.Error(w, "token generation failed", http.StatusInternalServerError)
 		return
 	}
+	rawToken := t
 	tokenHash := hashSHA256Hex(rawToken)
 
-	now := time.Now().Unix()
-	_, err = s.db.SQL.ExecContext(r.Context(),
+	_ = existingID // used below to decide token visibility
+
+	_, err := s.db.SQL.ExecContext(r.Context(),
 		`INSERT INTO agents (name, host, token_hash, version, status, last_seen)
 		 VALUES (?,?,?,?,?,?)
 		 ON CONFLICT(host) DO UPDATE SET name=excluded.name, token_hash=excluded.token_hash,
@@ -63,18 +75,22 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 		req.Name, req.Host, tokenHash, req.Version, "online", now,
 	)
 	if err != nil {
-		http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "db error", http.StatusInternalServerError)
 		return
+	}
+
+	resp := map[string]interface{}{
+		"host":    req.Host,
+		"name":    req.Name,
+		"message": "registered",
+	}
+	if rawToken != "" {
+		resp["token"] = rawToken
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
-		"token":   rawToken,
-		"host":    req.Host,
-		"name":    req.Name,
-		"message": "registered",
-	})
+	json.NewEncoder(w).Encode(resp) //nolint:errcheck
 }
 
 // handleAgentHeartbeat is called by an agent every N seconds to report liveness.
