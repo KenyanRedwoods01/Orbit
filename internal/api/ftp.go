@@ -7,11 +7,14 @@ import (
         "os"
         "os/exec"
         "path/filepath"
+        "regexp"
         "strconv"
         "strings"
         "time"
 
         "golang.org/x/crypto/bcrypt"
+
+        "github.com/KenyanRedwoods01/Orbit/internal/auth"
 )
 
 // ── FTP Server Control ────────────────────────────────────────────────────────
@@ -59,8 +62,28 @@ func (s *Server) handleFTPConfigPut(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "raw or parsed config required", http.StatusBadRequest)
                 return
         }
+        // Block dangerous vsftpd directives that could weaken FTP security
+        blockedDirectives := []string{"anon_upload_enable", "anon_mkdir_write_enable", "anon_other_write_enable",
+                "anon_root", "chroot_local_user", "local_root", "write_enable",
+                "background", "listen", "run_once"}
+        for _, line := range strings.Split(content, "\n") {
+                trimmed := strings.TrimSpace(line)
+                if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+                        continue
+                }
+                parts := strings.SplitN(trimmed, "=", 2)
+                if len(parts) == 2 {
+                        key := strings.TrimSpace(strings.ToLower(parts[0]))
+                        for _, blocked := range blockedDirectives {
+                                if key == blocked {
+                                        http.Error(w, "directive "+blocked+" is blocked for security", http.StatusBadRequest)
+                                        return
+                                }
+                        }
+                }
+        }
         if err := os.WriteFile(vsftpdConf, []byte(content), 0o644); err != nil {
-                http.Error(w, "write error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "write error", http.StatusInternalServerError)
                 return
         }
         w.Header().Set("Content-Type", "application/json")
@@ -159,15 +182,25 @@ func (s *Server) handleFTPUserCreate(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "username and password are required", http.StatusBadRequest)
                 return
         }
-        if req.HomeDir == "" {
-                req.HomeDir = "/home/ftp/" + req.Username
-        }
-        req.HomeDir = filepath.Clean(req.HomeDir)
-        if !filepath.IsAbs(req.HomeDir) {
-                http.Error(w, "invalid home directory", http.StatusBadRequest)
-                return
-        }
-        os.MkdirAll(req.HomeDir, 0o755) //nolint:errcheck
+	if req.HomeDir == "" {
+		req.HomeDir = "/home/ftp/" + req.Username
+	}
+	req.HomeDir = filepath.Clean(req.HomeDir)
+	if !filepath.IsAbs(req.HomeDir) {
+		http.Error(w, "invalid home directory", http.StatusBadRequest)
+		return
+	}
+	if strings.Contains(req.HomeDir, "..") {
+		http.Error(w, "home directory contains path traversal", http.StatusBadRequest)
+		return
+	}
+	// Use safeRoot to ensure home_dir stays within allowed paths
+	if _, err := safeRoot(req.HomeDir); err != nil {
+		http.Error(w, "home directory is not in an allowed path", http.StatusBadRequest)
+		return
+	}
+	os.MkdirAll(req.HomeDir, 0o755) //nolint:errcheck
+
 
         hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
         if err != nil {
@@ -183,7 +216,7 @@ func (s *Server) handleFTPUserCreate(w http.ResponseWriter, r *http.Request) {
                 req.Username, string(hash), req.HomeDir, req.UploadLimit, req.DownloadLimit, chroot,
         )
         if err != nil {
-                http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "db error", http.StatusInternalServerError)
                 return
         }
         id, _ := res.LastInsertId()
@@ -220,14 +253,31 @@ func (s *Server) handleFTPUserUpdate(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "bad request", http.StatusBadRequest)
                 return
         }
-        chroot, enabled := 0, 0
-        if req.Chroot {
-                chroot = 1
-        }
-        if req.Enabled {
-                enabled = 1
-        }
-        if req.Password != "" {
+	// Validate home_dir
+	if req.HomeDir != "" {
+		req.HomeDir = filepath.Clean(req.HomeDir)
+		if !filepath.IsAbs(req.HomeDir) {
+			http.Error(w, "invalid home directory", http.StatusBadRequest)
+			return
+		}
+		if strings.Contains(req.HomeDir, "..") {
+			http.Error(w, "home directory contains path traversal", http.StatusBadRequest)
+			return
+		}
+		if _, err := safeRoot(req.HomeDir); err != nil {
+			http.Error(w, "home directory is not in an allowed path", http.StatusBadRequest)
+			return
+		}
+	}
+
+	chroot, enabled := 0, 0
+	if req.Chroot {
+		chroot = 1
+	}
+	if req.Enabled {
+		enabled = 1
+	}
+	if req.Password != "" {
                 hash, err2 := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
                 if err2 != nil {
                         http.Error(w, "hash error", http.StatusInternalServerError)
@@ -381,10 +431,24 @@ func (s *Server) handleFTPMountAction(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "remote, mount_path, and action are required", http.StatusBadRequest)
                 return
         }
+        // Validate remote name — allowed chars only
+        reRemote := regexp.MustCompile(`^[A-Za-z0-9_\-][A-Za-z0-9_\-.]{0,63}$`)
+        if !reRemote.MatchString(req.Remote) {
+                http.Error(w, "invalid remote name", http.StatusBadRequest)
+                return
+        }
         req.MountPath = filepath.Clean(req.MountPath)
         if !filepath.IsAbs(req.MountPath) {
                 http.Error(w, "mount_path must be an absolute path", http.StatusBadRequest)
                 return
+        }
+        // Block dangerous mount paths
+        blockedPaths := []string{"/", "/etc", "/var", "/usr", "/boot", "/proc", "/sys", "/dev", "/root", "/home"}
+        for _, bp := range blockedPaths {
+                if req.MountPath == bp || strings.HasPrefix(req.MountPath, bp+"/") {
+                        http.Error(w, "mount_path targets a blocked system path", http.StatusBadRequest)
+                        return
+                }
         }
         var out []byte
         var err error

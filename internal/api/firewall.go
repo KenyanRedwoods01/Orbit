@@ -419,10 +419,20 @@ func buildUFWArgs(rule FWRule) []string {
         if rule.Protocol != "" && rule.Protocol != "both" && rule.Protocol != "any" {
                 args = append(args, "proto", rule.Protocol)
         }
-        if rule.Comment != "" {
-                args = append(args, "comment", rule.Comment)
-        }
-        return args
+	if rule.Comment != "" {
+		// Strip dangerous characters from comment to prevent command injection
+		safeComment := strings.Map(func(r rune) rune {
+			if r > 127 || r == '\'' || r == '"' || r == ';' || r == '|' || r == '`' || r == '$' || r == '\\' {
+				return -1
+			}
+			return r
+		}, rule.Comment)
+		safeComment = strings.TrimSpace(safeComment)
+		if safeComment != "" {
+			args = append(args, "comment", safeComment)
+		}
+	}
+	return args
 }
 
 func buildUFWCommand(rule FWRule) string {
@@ -493,6 +503,13 @@ func f2bJailStatus(name string) (banned, failed, total int, ips []string) {
 }
 
 func f2bBanIP(ip, jail string) error {
+        // Defence-in-depth: validate even though callers should already validate
+        if err := validateIP(ip); err != nil {
+                return err
+        }
+        if err := validateJailName(jail); err != nil {
+                return err
+        }
         if !f2bAvailable() {
                 return nil
         }
@@ -504,6 +521,13 @@ func f2bBanIP(ip, jail string) error {
 }
 
 func f2bUnbanIP(ip, jail string) error {
+        // Defence-in-depth: validate even though callers should already validate
+        if err := validateIP(ip); err != nil {
+                return err
+        }
+        if err := validateJailName(jail); err != nil {
+                return err
+        }
         if !f2bAvailable() {
                 return nil
         }
@@ -673,7 +697,7 @@ func (s *Server) handleFirewallEnable(w http.ResponseWriter, r *http.Request) {
         if ufwAvailable() {
                 out, err := exec.Command("ufw", "--force", "enable").CombinedOutput()
                 if err != nil {
-                        http.Error(w, "ufw enable failed: "+string(out), http.StatusInternalServerError)
+                        http.Error(w, "ufw enable failed", http.StatusInternalServerError)
                         return
                 }
         }
@@ -685,7 +709,7 @@ func (s *Server) handleFirewallDisable(w http.ResponseWriter, r *http.Request) {
         if ufwAvailable() {
                 out, err := exec.Command("ufw", "--force", "disable").CombinedOutput()
                 if err != nil {
-                        http.Error(w, "ufw disable failed: "+string(out), http.StatusInternalServerError)
+                        http.Error(w, "ufw disable failed", http.StatusInternalServerError)
                         return
                 }
         }
@@ -717,10 +741,19 @@ func (s *Server) handleFirewallSetDefault(w http.ResponseWriter, r *http.Request
         if req.Direction == "" {
                 req.Direction = "incoming"
         }
+        if err := validateFWPolicy(req.Policy); err != nil {
+                http.Error(w, "invalid policy", http.StatusBadRequest)
+                return
+        }
+        if err := validateFWDirection(req.Direction); err != nil {
+                http.Error(w, "invalid direction", http.StatusBadRequest)
+                return
+        }
         if ufwAvailable() {
                 out, err := exec.Command("ufw", "default", req.Policy, req.Direction).CombinedOutput()
                 if err != nil {
-                        http.Error(w, "ufw default failed: "+string(out), http.StatusInternalServerError)
+                        _ = out
+                        http.Error(w, "ufw default failed", http.StatusInternalServerError)
                         return
                 }
         }
@@ -770,6 +803,23 @@ func (s *Server) handleFirewallAddRule(w http.ResponseWriter, r *http.Request) {
         if !validActions[inp.Action] {
                 inp.Action = "allow"
         }
+        // Validate network values before persisting to DB / passing to UFW
+        if err := validateIPOrCIDR(inp.SourceIP); err != nil && inp.SourceIP != "" {
+                http.Error(w, "invalid source IP or CIDR", http.StatusBadRequest)
+                return
+        }
+        if err := validateIPOrCIDR(inp.DestIP); err != nil && inp.DestIP != "" {
+                http.Error(w, "invalid destination IP or CIDR", http.StatusBadRequest)
+                return
+        }
+        if err := validateFWProtocol(inp.Protocol); err != nil {
+                http.Error(w, "invalid protocol", http.StatusBadRequest)
+                return
+        }
+        if err := validatePortSpec(inp.Port); err != nil {
+                http.Error(w, "invalid port specification", http.StatusBadRequest)
+                return
+        }
         if inp.Direction == "" {
                 inp.Direction = "in"
         }
@@ -808,7 +858,7 @@ func (s *Server) handleFirewallAddRule(w http.ResponseWriter, r *http.Request) {
                 rule.SourceIP, rule.DestIP, rule.Iface, rule.Action, rule.Logging, rule.Comment, rule.ServiceColor,
         )
         if err != nil {
-                http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "database error", http.StatusInternalServerError)
                 return
         }
 
@@ -820,33 +870,53 @@ func (s *Server) handleFirewallAddRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFirewallUpdateRule(w http.ResponseWriter, r *http.Request) {
-        id := r.PathValue("id")
-        var inp FWRuleInput
-        if err := json.NewDecoder(r.Body).Decode(&inp); err != nil {
-                http.Error(w, "bad request", http.StatusBadRequest)
-                return
-        }
-        if inp.Direction == "" {
-                inp.Direction = "in"
-        }
-        if inp.Protocol == "" {
-                inp.Protocol = "tcp"
-        }
-        if inp.Iface == "" {
-                inp.Iface = "any"
-        }
-        if inp.Logging == "" {
-                inp.Logging = "off"
-        }
-        if inp.PortLabel == "" {
-                inp.PortLabel = inp.Port
-        }
+	id := r.PathValue("id")
+	var inp FWRuleInput
+	if err := json.NewDecoder(r.Body).Decode(&inp); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if inp.Direction == "" {
+		inp.Direction = "in"
+	}
+	if inp.Protocol == "" {
+		inp.Protocol = "tcp"
+	}
+	if inp.Iface == "" {
+		inp.Iface = "any"
+	}
+	if inp.Logging == "" {
+		inp.Logging = "off"
+	}
+	if inp.PortLabel == "" {
+		inp.PortLabel = inp.Port
+	}
 
-        res, err := s.db.SQL.ExecContext(r.Context(),
-                `UPDATE fw_rules SET direction=?,protocol=?,port=?,port_label=?,source_ip=?,dest_ip=?,iface=?,action=?,logging=?,comment=?,service_color=? WHERE id=?`,
-                inp.Direction, inp.Protocol, inp.Port, inp.PortLabel, inp.SourceIP, inp.DestIP,
-                inp.Iface, inp.Action, inp.Logging, inp.Comment, inp.ServiceColor, id,
-        )
+	// Validate network values before persisting
+	if err := validateIPOrCIDR(inp.SourceIP); err != nil && inp.SourceIP != "" {
+		http.Error(w, "invalid source IP or CIDR", http.StatusBadRequest)
+		return
+	}
+	if err := validateIPOrCIDR(inp.DestIP); err != nil && inp.DestIP != "" {
+		http.Error(w, "invalid destination IP or CIDR", http.StatusBadRequest)
+		return
+	}
+	if err := validateFWProtocol(inp.Protocol); err != nil {
+		http.Error(w, "invalid protocol", http.StatusBadRequest)
+		return
+	}
+	if inp.Port != "" && inp.Port != "any" {
+		if err := validatePortSpec(inp.Port); err != nil {
+			http.Error(w, "invalid port specification", http.StatusBadRequest)
+			return
+		}
+	}
+
+	res, err := s.db.SQL.ExecContext(r.Context(),
+		`UPDATE fw_rules SET direction=?,protocol=?,port=?,port_label=?,source_ip=?,dest_ip=?,iface=?,action=?,logging=?,comment=?,service_color=? WHERE id=?`,
+		inp.Direction, inp.Protocol, inp.Port, inp.PortLabel, inp.SourceIP, inp.DestIP,
+		inp.Iface, inp.Action, inp.Logging, inp.Comment, inp.ServiceColor, id,
+	)
         if err != nil {
                 http.Error(w, "db error", http.StatusInternalServerError)
                 return
@@ -933,6 +1003,31 @@ func (s *Server) handleFirewallImportRules(w http.ResponseWriter, r *http.Reques
         order := s.fwMaxOrder(ctx)
         var created []FWRule
         for _, inp := range body.Rules {
+                // Validate all import fields
+                if err := validateFWDirection(inp.Direction); err != nil {
+                        http.Error(w, fmt.Sprintf("rule %q: invalid direction: %v", inp.Port, err), http.StatusBadRequest)
+                        return
+                }
+                if err := validateFWProtocol(inp.Protocol); err != nil {
+                        http.Error(w, fmt.Sprintf("rule %q: invalid protocol: %v", inp.Port, err), http.StatusBadRequest)
+                        return
+                }
+                if err := validateFWPolicy(inp.Action); err != nil {
+                        http.Error(w, fmt.Sprintf("rule %q: invalid action: %v", inp.Port, err), http.StatusBadRequest)
+                        return
+                }
+                if err := validatePortSpec(inp.Port); err != nil {
+                        http.Error(w, fmt.Sprintf("rule %q: invalid port: %v", inp.Port, err), http.StatusBadRequest)
+                        return
+                }
+                if err := validateIPOrCIDR(inp.SourceIP); err != nil {
+                        http.Error(w, fmt.Sprintf("rule %q: invalid source: %v", inp.Port, err), http.StatusBadRequest)
+                        return
+                }
+                if err := validateIPOrCIDR(inp.DestIP); err != nil {
+                        http.Error(w, fmt.Sprintf("rule %q: invalid dest: %v", inp.Port, err), http.StatusBadRequest)
+                        return
+                }
                 if inp.Direction == "" {
                         inp.Direction = "in"
                 }
@@ -1044,7 +1139,7 @@ func (s *Server) handleFirewallCreateProfile(w http.ResponseWriter, r *http.Requ
                 id, inp.Name, inp.Ports, inp.Proto, inp.Service, en, inp.Color,
         )
         if err != nil {
-                http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "database error", http.StatusInternalServerError)
                 return
         }
         p := FWAppProfile{ID: id, Name: inp.Name, Ports: inp.Ports, Proto: inp.Proto, Service: inp.Service, Enabled: inp.Enabled, Color: inp.Color}
@@ -1166,8 +1261,16 @@ func (s *Server) handleFirewallNATCreate(w http.ResponseWriter, r *http.Request)
                 http.Error(w, "publicPort, destIp and destPort required", http.StatusBadRequest)
                 return
         }
+        if err := validateIP(inp.DestIP); err != nil {
+                http.Error(w, "invalid destIp: "+err.Error(), http.StatusBadRequest)
+                return
+        }
         if inp.Proto == "" {
                 inp.Proto = "tcp"
+        }
+        if err := validateFWProtocol(inp.Proto); err != nil {
+                http.Error(w, err.Error(), http.StatusBadRequest)
+                return
         }
         id := newID("nat-")
         en := 0
@@ -1179,7 +1282,7 @@ func (s *Server) handleFirewallNATCreate(w http.ResponseWriter, r *http.Request)
                 id, inp.PublicPort, inp.Proto, inp.DestIP, inp.DestPort, inp.Comment, en,
         )
         if err != nil {
-                http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "database error", http.StatusInternalServerError)
                 return
         }
         nat := FWNATRule{ID: id, PublicPort: inp.PublicPort, Proto: inp.Proto, DestIP: inp.DestIP, DestPort: inp.DestPort, Comment: inp.Comment, Enabled: inp.Enabled}
@@ -1199,6 +1302,14 @@ func (s *Server) handleFirewallNATUpdate(w http.ResponseWriter, r *http.Request)
         }
         if err := json.NewDecoder(r.Body).Decode(&inp); err != nil {
                 http.Error(w, "bad request", http.StatusBadRequest)
+                return
+        }
+        if err := validateIP(inp.DestIP); err != nil {
+                http.Error(w, "invalid destIp: "+err.Error(), http.StatusBadRequest)
+                return
+        }
+        if err := validateFWProtocol(inp.Proto); err != nil {
+                http.Error(w, err.Error(), http.StatusBadRequest)
                 return
         }
         en := 0
@@ -1348,8 +1459,16 @@ func (s *Server) handleFirewallF2BBan(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "ip required", http.StatusBadRequest)
                 return
         }
+        if err := validateIP(inp.IP); err != nil {
+                http.Error(w, "invalid IP address", http.StatusBadRequest)
+                return
+        }
         if inp.Jail == "" {
                 inp.Jail = "sshd"
+        }
+        if err := validateJailName(inp.Jail); err != nil {
+                http.Error(w, "invalid jail name", http.StatusBadRequest)
+                return
         }
         since := time.Now().Format("2006-01-02 15:04")
         _, err := s.db.SQL.ExecContext(r.Context(),
@@ -1371,7 +1490,17 @@ func (s *Server) handleFirewallF2BBan(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleFirewallF2BUnban(w http.ResponseWriter, r *http.Request) {
         ip := r.PathValue("ip")
+        if err := validateIP(ip); err != nil {
+                http.Error(w, "invalid IP address", http.StatusBadRequest)
+                return
+        }
         jail := r.URL.Query().Get("jail")
+        if jail != "" {
+                if err := validateJailName(jail); err != nil {
+                        http.Error(w, "invalid jail name", http.StatusBadRequest)
+                        return
+                }
+        }
         if jail == "" {
                 s.db.SQL.QueryRowContext(r.Context(), `SELECT jail FROM fw_banned_ips WHERE ip=? LIMIT 1`, ip).Scan(&jail) //nolint:errcheck
         }
@@ -1557,7 +1686,22 @@ func (s *Server) handleFirewallBuildCommand(w http.ResponseWriter, r *http.Reque
 // ─────────────────────────────────────────────────────────────────────────────
 
 var fwWSUpgrader = websocket.Upgrader{
-        CheckOrigin: func(r *http.Request) bool { return true },
+        CheckOrigin: func(r *http.Request) bool {
+                origin := r.Header.Get("Origin")
+                if origin == "" {
+                        return false
+                }
+                originHost := strings.TrimPrefix(strings.TrimPrefix(origin, "https://"), "http://")
+                originHost = strings.Split(originHost, ":")[0]
+                requestHost := strings.Split(r.Host, ":")[0]
+                if strings.EqualFold(originHost, requestHost) {
+                        return true
+                }
+                if originHost == "localhost" || originHost == "127.0.0.1" {
+                        return true
+                }
+                return false
+        },
 }
 
 func (s *Server) handleFirewallLogsWS(w http.ResponseWriter, r *http.Request) {

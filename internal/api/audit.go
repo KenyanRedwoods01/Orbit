@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -38,14 +40,13 @@ func (s *Server) auditMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			if err == nil {
 				r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 				sum := sha256.Sum256(bodyBytes)
-				bodyHash = fmt.Sprintf("%x", sum[:8]) // 8-byte prefix is enough
+				bodyHash = fmt.Sprintf("%x", sum[:8])
 			}
 		}
 
-		ip := r.RemoteAddr
-		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-			ip = strings.Split(fwd, ",")[0]
-		}
+		// Use RemoteAddr as authoritative IP; only trust X-Forwarded-For from
+		// loopback/private ranges (i.e. a trusted local reverse-proxy).
+		ip := extractAuditIP(r)
 
 		// Wrap the ResponseWriter to capture the status code
 		rw := &statusCapture{ResponseWriter: w, status: http.StatusOK}
@@ -57,11 +58,54 @@ func (s *Server) auditMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			defer cancel()
 			s.db.SQL.ExecContext(ctx, //nolint:errcheck
 				`INSERT INTO audit_log (user, method, path, status, ip, body_hash, ts)
-				 VALUES (?,?,?,?,?,?,unixepoch())`,
+                 VALUES (?,?,?,?,?,?,unixepoch())`,
 				username, r.Method, r.URL.Path, rw.status, ip, bodyHash,
 			)
 		}()
 	}
+}
+
+// extractAuditIP returns the real client IP for audit purposes.
+// X-Forwarded-For is only trusted when the direct connection comes from a
+// private/loopback address (i.e. a local reverse proxy like nginx).
+func extractAuditIP(r *http.Request) string {
+	remoteHost, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		remoteHost = r.RemoteAddr
+	}
+
+	if isPrivateOrLoopback(remoteHost) {
+		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+			// Take only the first (leftmost) IP; strip whitespace
+			first := strings.TrimSpace(strings.Split(fwd, ",")[0])
+			if first != "" {
+				return first
+			}
+		}
+		if realIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); realIP != "" {
+			return realIP
+		}
+	}
+	return remoteHost
+}
+
+// isPrivateOrLoopback returns true for 127.x, 10.x, 172.16-31.x, 192.168.x, ::1.
+func isPrivateOrLoopback(ip string) bool {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	if parsed.IsLoopback() {
+		return true
+	}
+	private := []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"}
+	for _, cidr := range private {
+		_, network, err := net.ParseCIDR(cidr)
+		if err == nil && network.Contains(parsed) {
+			return true
+		}
+	}
+	return false
 }
 
 // statusCapture wraps ResponseWriter to record the HTTP status code.
@@ -108,7 +152,7 @@ func (s *Server) handleAuditList(w http.ResponseWriter, r *http.Request) {
 	args = append(args, limit)
 	rows, err := s.db.SQL.QueryContext(r.Context(),
 		`SELECT id, user, method, path, status, COALESCE(ip,''), COALESCE(body_hash,''), ts
-		 FROM audit_log `+where+` ORDER BY id DESC LIMIT ?`,
+                 FROM audit_log `+where+` ORDER BY id DESC LIMIT ?`,
 		args...,
 	)
 	if err != nil {
@@ -152,7 +196,7 @@ func (s *Server) handleAuditExport(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := s.db.SQL.QueryContext(r.Context(),
 		`SELECT id, user, method, path, status, COALESCE(ip,''), COALESCE(body_hash,''), ts
-		 FROM audit_log ORDER BY id DESC LIMIT 5000`,
+                 FROM audit_log ORDER BY id DESC LIMIT 5000`,
 	)
 	if err != nil {
 		http.Error(w, "db error", http.StatusInternalServerError)
@@ -184,11 +228,16 @@ func (s *Server) handleAuditExport(w http.ResponseWriter, r *http.Request) {
 	if format == "csv" {
 		w.Header().Set("Content-Type", "text/csv")
 		w.Header().Set("Content-Disposition", `attachment; filename="audit_log.csv"`)
-		w.Write([]byte("id,user,method,path,status,ip,body_hash,ts\n")) //nolint:errcheck
+		csvW := csv.NewWriter(w)
+		csvW.Write([]string{"id", "user", "method", "path", "status", "ip", "body_hash", "ts"}) //nolint:errcheck
 		for _, e := range entries {
-			w.Write([]byte(fmt.Sprintf("%d,%s,%s,%s,%d,%s,%s,%d\n", //nolint:errcheck
-				e.ID, e.User, e.Method, e.Path, e.Status, e.IP, e.BodyHash, e.Ts)))
+			// Use encoding/csv to prevent CSV injection (formula injection attacks)
+			csvW.Write([]string{ //nolint:errcheck
+				fmt.Sprintf("%d", e.ID), e.User, e.Method, e.Path,
+				fmt.Sprintf("%d", e.Status), e.IP, e.BodyHash, fmt.Sprintf("%d", e.Ts),
+			})
 		}
+		csvW.Flush()
 		return
 	}
 
@@ -226,7 +275,7 @@ func (s *Server) handleAuditClear(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAPITokenList(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.db.SQL.QueryContext(r.Context(),
 		`SELECT id, name, scopes, COALESCE(ip_restrict,''), expires_at, created_at, last_used
-		 FROM api_tokens ORDER BY id DESC`,
+                 FROM api_tokens ORDER BY id DESC`,
 	)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -277,7 +326,6 @@ func (s *Server) handleAPITokenCreate(w http.ResponseWriter, r *http.Request) {
 		req.Scopes = "read:servers"
 	}
 
-	// Generate a random token
 	rawToken, err := generateRandomHex(32)
 	if err != nil {
 		http.Error(w, "token generation failed", http.StatusInternalServerError)
@@ -307,7 +355,7 @@ func (s *Server) handleAPITokenCreate(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
 		"id":         id,
 		"name":       req.Name,
-		"token":      rawToken, // shown only once
+		"token":      rawToken,
 		"scopes":     req.Scopes,
 		"expires_at": expiresAt,
 		"created_at": time.Now().Unix(),

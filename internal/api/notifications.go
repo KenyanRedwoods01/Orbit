@@ -74,7 +74,7 @@ func (s *Server) handleNotificationChannelCreate(w http.ResponseWriter, r *http.
 		req.Name, req.Type, req.Config, req.Enabled,
 	)
 	if err != nil {
-		http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
 	req.ID, _ = res.LastInsertId()

@@ -164,6 +164,22 @@ type suricataHostbit struct {
         Added   string `json:"added"`
 }
 
+var suricataAllowedCommands = map[string]bool{
+	"reload":          true,
+	"reload-rules":    true,
+	"shutdown-check":  true,
+	"iface-list":      true,
+	"iface-stat":      true,
+	"iface-bypass-stat": true,
+	"list-hostbits":    true,
+	"add-hostbit":      true,
+	"remove-hostbit":   true,
+	"uptime":          true,
+	"stats":           true,
+	"dump-counters":   true,
+	"registered-flows": true,
+}
+
 type suricataLogEntry struct {
         Timestamp string `json:"timestamp"`
         Level     string `json:"level"`
@@ -727,7 +743,7 @@ func (s *Server) handleSuricataRuleCreate(w http.ResponseWriter, r *http.Request
         localRules := "/etc/suricata/rules/local.rules"
         f, err := os.OpenFile(localRules, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
         if err != nil {
-                writeJSON(w, map[string]interface{}{"ok": false, "error": err.Error()})
+                writeJSON(w, map[string]interface{}{"ok": false, "error": "operation failed"})
                 return
         }
         defer f.Close()
@@ -751,17 +767,21 @@ func (s *Server) handleSuricataRuleCreate(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleSuricataRuleToggle(w http.ResponseWriter, r *http.Request) {
-        var req struct {
-                SID    string `json:"sid"`
-                Enable bool   `json:"enable"`
-        }
-        json.NewDecoder(r.Body).Decode(&req)
-        // suricata-update disable/enable rule
-        action := "disable-conf"
-        if req.Enable {
-                action = "enable-conf"
-        }
-        out, err := exec.Command("suricata-update", action, req.SID).CombinedOutput()
+	var req struct {
+		SID    string `json:"sid"`
+		Enable bool   `json:"enable"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+	if _, err := strconv.Atoi(req.SID); err != nil || req.SID == "" {
+		writeJSON(w, map[string]interface{}{"ok": false, "error": "invalid sid"})
+		return
+	}
+	// suricata-update disable/enable rule
+	action := "disable-conf"
+	if req.Enable {
+		action = "enable-conf"
+	}
+	out, err := exec.Command("suricata-update", action, req.SID).CombinedOutput()
         ok := err == nil
         writeJSON(w, map[string]interface{}{"ok": ok, "output": string(out)})
 }
@@ -847,7 +867,7 @@ func (s *Server) handleSuricataConfigSave(w http.ResponseWriter, r *http.Request
         }
         err := os.WriteFile(req.Path, []byte(req.Raw), 0640)
         if err != nil {
-                writeJSON(w, map[string]interface{}{"ok": false, "error": err.Error()})
+                writeJSON(w, map[string]interface{}{"ok": false, "error": "operation failed"})
                 return
         }
         out, _ := exec.Command("systemctl", "restart", "suricata").CombinedOutput()
@@ -935,12 +955,16 @@ func (s *Server) handleSuricataHostbitRemove(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *Server) handleSuricataDropIP(w http.ResponseWriter, r *http.Request) {
-        var req struct {
-                IP      string `json:"ip"`
-                Comment string `json:"comment"`
-        }
-        json.NewDecoder(r.Body).Decode(&req)
-        // Add hostbit as a block
+	var req struct {
+		IP      string `json:"ip"`
+		Comment string `json:"comment"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+	if !regexp.MustCompile(`^[0-9a-fA-F.:/]+$`).MatchString(req.IP) {
+		writeJSON(w, map[string]interface{}{"ok": false, "error": "invalid ip"})
+		return
+	}
+	// Add hostbit as a block
         suricataSendSocket("add-hostbit", map[string]interface{}{ //nolint:errcheck
                 "ip": req.IP, "name": "orbit-block", "expire": 86400,
         })
@@ -971,6 +995,19 @@ func (s *Server) handleSuricataInstall(w http.ResponseWriter, r *http.Request) {
         }
         if req.Interface == "" {
                 req.Interface = "eth0"
+        }
+
+        // Validate Mode against allowlist
+        validModes := map[string]bool{"ids": true, "ips": true}
+        if !validModes[req.Mode] {
+                http.Error(w, "invalid mode: must be ids or ips", http.StatusBadRequest)
+                return
+        }
+        // Validate Interface — must be a valid network interface name
+        reInterface := regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_\-]{0,31}$`)
+        if !reInterface.MatchString(req.Interface) {
+                http.Error(w, "invalid interface name", http.StatusBadRequest)
+                return
         }
 
         script := fmt.Sprintf(`#!/bin/bash
@@ -1017,14 +1054,18 @@ echo "IPS mode active. Traffic is now routed through Suricata."`
 }
 
 func (s *Server) handleSuricataSocket(w http.ResponseWriter, r *http.Request) {
-        var req struct {
-                Command   string      `json:"command"`
-                Arguments interface{} `json:"arguments"`
-        }
-        json.NewDecoder(r.Body).Decode(&req)
-        result, err := suricataSendSocket(req.Command, req.Arguments)
+	var req struct {
+		Command   string      `json:"command"`
+		Arguments interface{} `json:"arguments"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+	if !suricataAllowedCommands[req.Command] {
+		writeJSON(w, map[string]interface{}{"ok": false, "error": "command not allowed"})
+		return
+	}
+	result, err := suricataSendSocket(req.Command, req.Arguments)
         if err != nil {
-                writeJSON(w, map[string]interface{}{"ok": false, "error": err.Error()})
+                writeJSON(w, map[string]interface{}{"ok": false, "error": "operation failed"})
                 return
         }
         writeJSON(w, map[string]interface{}{"ok": true, "result": result})

@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify'
 import { useState, useRef, useEffect, useCallback, memo } from 'react'
 import Editor from '@monaco-editor/react'
 import {
@@ -230,7 +231,7 @@ function updateNodeInTree(nodes: TreeNode[], id: string, fn: (n: TreeNode) => Tr
 
 // ── Markdown Renderer ─────────────────────────────────────────────────────────
 function renderMarkdown(text: string): string {
-  return text
+  return DOMPurify.sanitize(text
     .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
@@ -245,7 +246,7 @@ function renderMarkdown(text: string): string {
     .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
     .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
     .replace(/^(?!<[a-z]|$)(.+)$/gm, '<p>$1</p>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:var(--color-accent)">$1</a>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:var(--color-accent)">$1</a>'))
 }
 
 
@@ -273,7 +274,7 @@ function SvgViewer({ node, content }: { node: TreeNode; content: string }) {
   return (
     <div className={styles.svgViewer}>
       <div className={styles.svgViewerLeft}>
-        <div className={styles.svgPreview} dangerouslySetInnerHTML={{ __html: content }} />
+        <div className={styles.svgPreview} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }} />
         <div style={{ marginTop: 16, fontSize: 11, color: 'var(--color-text-muted)' }}>{node.name} · {node.size}</div>
       </div>
       <div className={styles.svgViewerRight}>

@@ -186,7 +186,7 @@ func (s *Server) handleProcessSignal(w http.ResponseWriter, r *http.Request) {
                 return
         }
         if err := proc.Signal(sig); err != nil {
-                http.Error(w, "failed to send signal: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "failed to send signal", http.StatusInternalServerError)
                 return
         }
 
@@ -261,7 +261,7 @@ func (s *Server) handleProcessRenice(w http.ResponseWriter, r *http.Request) {
         }
 
         if err := syscall.Setpriority(syscall.PRIO_PROCESS, int(pidVal), req.Nice); err != nil {
-                http.Error(w, "setpriority failed: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "setpriority failed", http.StatusInternalServerError)
                 return
         }
 
