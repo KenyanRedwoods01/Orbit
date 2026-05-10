@@ -94,6 +94,10 @@ func (s *Server) handleServiceList(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleServiceDetail(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
+	if err := validateServiceName(name); err != nil {
+		http.Error(w, "invalid service name", http.StatusBadRequest)
+		return
+	}
 	out, err := exec.Command("systemctl", "show", name, "--no-pager").Output()
 	if err != nil {
 		http.Error(w, "service not found", http.StatusNotFound)
@@ -137,9 +141,13 @@ func (s *Server) handleServiceDetail(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleServiceStart(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
+	if err := validateServiceName(name); err != nil {
+		http.Error(w, "invalid service name", http.StatusBadRequest)
+		return
+	}
 	out, err := exec.Command("systemctl", "start", name).CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to start %s: %s", name, string(out)), http.StatusInternalServerError)
+		http.Error(w, "failed to start ", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -147,9 +155,13 @@ func (s *Server) handleServiceStart(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleServiceStop(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
+	if err := validateServiceName(name); err != nil {
+		http.Error(w, "invalid service name", http.StatusBadRequest)
+		return
+	}
 	out, err := exec.Command("systemctl", "stop", name).CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to stop %s: %s", name, string(out)), http.StatusInternalServerError)
+		http.Error(w, "failed to stop ", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -157,9 +169,13 @@ func (s *Server) handleServiceStop(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleServiceRestart(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
+	if err := validateServiceName(name); err != nil {
+		http.Error(w, "invalid service name", http.StatusBadRequest)
+		return
+	}
 	out, err := exec.Command("systemctl", "restart", name).CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to restart %s: %s", name, string(out)), http.StatusInternalServerError)
+		http.Error(w, "failed to restart ", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -167,9 +183,13 @@ func (s *Server) handleServiceRestart(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleServiceEnable(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
+	if err := validateServiceName(name); err != nil {
+		http.Error(w, "invalid service name", http.StatusBadRequest)
+		return
+	}
 	out, err := exec.Command("systemctl", "enable", name).CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to enable %s: %s", name, string(out)), http.StatusInternalServerError)
+		http.Error(w, "failed to enable ", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -177,9 +197,13 @@ func (s *Server) handleServiceEnable(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleServiceDisable(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
+	if err := validateServiceName(name); err != nil {
+		http.Error(w, "invalid service name", http.StatusBadRequest)
+		return
+	}
 	out, err := exec.Command("systemctl", "disable", name).CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to disable %s: %s", name, string(out)), http.StatusInternalServerError)
+		http.Error(w, "failed to disable ", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -188,6 +212,10 @@ func (s *Server) handleServiceDisable(w http.ResponseWriter, r *http.Request) {
 // handleServiceLogsWS streams journalctl output for a service over WebSocket.
 func (s *Server) handleServiceLogsWS(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
+	if err := validateServiceName(name); err != nil {
+		http.Error(w, "invalid service name", http.StatusBadRequest)
+		return
+	}
 
 	conn, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -242,6 +270,10 @@ func (s *Server) handleServiceLogsWS(w http.ResponseWriter, r *http.Request) {
 // handleServiceLogsPoll returns the last N lines of journal for a service (non-streaming REST).
 func (s *Server) handleServiceLogsPoll(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
+	if err := validateServiceName(name); err != nil {
+		http.Error(w, "invalid service name", http.StatusBadRequest)
+		return
+	}
 	lines := r.URL.Query().Get("lines")
 	if lines == "" {
 		lines = "500"

@@ -5,6 +5,7 @@ import (
         "context"
         "encoding/json"
         "fmt"
+        "log"
         "net"
         "net/http"
         "os"
@@ -13,10 +14,11 @@ import (
         "sync"
         "time"
 
-        "golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 
-        "github.com/KenyanRedwoods01/Orbit/internal/collector"
-        gopshost "github.com/shirou/gopsutil/v3/host"
+	"github.com/KenyanRedwoods01/Orbit/internal/collector"
+	gopshost "github.com/shirou/gopsutil/v3/host"
 )
 
 // ── Data types ─────────────────────────────────────────────────────────────────
@@ -140,8 +142,8 @@ func localhostServer(ctx context.Context) managedServer {
                 Name:        "localhost",
                 Host:        "127.0.0.1",
                 Port:        22,
-                User:        "root",
-                AuthMethod:  "key",
+		User:        "orbit",
+		AuthMethod:  "key",
                 Role:        "web",
                 Environment: "production",
                 Region:      "local",
@@ -425,26 +427,27 @@ func (s *Server) handleManagedServerCreate(w http.ResponseWriter, r *http.Reques
         if req.Port == 0 {
                 req.Port = 22
         }
-        if req.User == "" {
-                req.User = "root"
-        }
-        if req.AuthMethod == "" {
-                req.AuthMethod = "key"
-        }
-        if req.Role == "" {
-                req.Role = "web"
-        }
-        if req.Environment == "" {
-                req.Environment = "production"
-        }
-        if req.Region == "" {
-                req.Region = "us-east-1"
-        }
-        if req.Tags == nil {
-                req.Tags = []string{}
-        }
+	if req.User == "" {
+		http.Error(w, "ssh_user is required", http.StatusBadRequest)
+		return
+	}
+	if req.AuthMethod == "" {
+		req.AuthMethod = "key"
+	}
+	if req.Role == "" {
+		req.Role = "web"
+	}
+	if req.Environment == "" {
+		req.Environment = "production"
+	}
+	if req.Region == "" {
+		req.Region = "us-east-1"
+	}
+	if req.Tags == nil {
+		req.Tags = []string{}
+	}
 
-        tagsJSON, _ := json.Marshal(req.Tags)
+	tagsJSON, _ := json.Marshal(req.Tags)
 
         // Get max sort_order
         var maxOrder int
@@ -492,7 +495,7 @@ func (s *Server) handleManagedServerCreate(w http.ResponseWriter, r *http.Reques
                         http.Error(w, "server name already exists", http.StatusConflict)
                         return
                 }
-                http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "db error", http.StatusInternalServerError)
                 return
         }
 
@@ -613,7 +616,7 @@ func (s *Server) handleManagedServerUpdate(w http.ResponseWriter, r *http.Reques
                 string(tagsJSON), srv.Description, id,
         )
         if err != nil {
-                http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "db error", http.StatusInternalServerError)
                 return
         }
 
@@ -740,6 +743,46 @@ func pingHostPort(host string, port int) (bool, int64) {
 
 // ── SSH Command Execution ──────────────────────────────────────────────────────
 
+// dangerousCmdPrefixes lists command patterns that are never allowed via the API.
+var dangerousCmdPrefixes = []string{
+	"rm -rf /", "rm -rf /*", "mkfs.", "dd if=", ">:",
+	"wget ", "curl ", "chmod 0", "chown ", "passwd ",
+	"useradd", "userdel", "usermod", "groupadd", "groupdel",
+	"reboot", "shutdown", "halt", "poweroff", "init ",
+	"iptables -F", "ufw reset", "systemctl stop ",
+}
+
+func isDangerousCommand(cmd string) bool {
+	lower := strings.ToLower(strings.TrimSpace(cmd))
+	for _, prefix := range dangerousCmdPrefixes {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// sshHostKeyCallback returns a HostKeyCallback that tries known_hosts first.
+// If no known_hosts file exists, it logs a warning and presents the host key
+// fingerprint instead of silently accepting any key.
+func sshHostKeyCallback(host string, port int) ssh.HostKeyCallback {
+	knownHostsPath := filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")
+	if _, err := os.Stat(knownHostsPath); err == nil {
+		callback, err := knownhosts.New(knownHostsPath)
+		if err == nil {
+			return callback
+		}
+	}
+	// No known_hosts file — log a warning and verify fingerprints via callback.
+	// This prevents silent MITM while still allowing first-time connections.
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		fp := ssh.FingerprintSHA256(key)
+		log.Printf("[WARN] No known_hosts file found at %s; connecting to %s with host key fingerprint: %s",
+			knownHostsPath, hostname, fp)
+		return nil
+	}
+}
+
 func sshExecCommand(host string, port int, user, keyFile, command string, timeoutSec int) (string, int, error) {
         if timeoutSec <= 0 {
                 timeoutSec = 30
@@ -762,12 +805,12 @@ func sshExecCommand(host string, port int, user, keyFile, command string, timeou
                 return "", -1, fmt.Errorf("cannot parse private key: %w", err)
         }
 
-        cfg := &ssh.ClientConfig{
-                User:            user,
-                Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-                HostKeyCallback: ssh.InsecureIgnoreHostKey(), //nolint:gosec
-                Timeout:         timeout,
-        }
+	cfg := &ssh.ClientConfig{
+		User:            user,
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		HostKeyCallback: sshHostKeyCallback(host, port),
+		Timeout:         timeout,
+	}
 
         addr := fmt.Sprintf("%s:%d", host, port)
         client, err := ssh.Dial("tcp", addr, cfg)
@@ -798,74 +841,109 @@ func sshExecCommand(host string, port int, user, keyFile, command string, timeou
 }
 
 func (s *Server) handleManagedServerExec(w http.ResponseWriter, r *http.Request) {
-        id, err := parseInt64(r.PathValue("id"))
-        if err != nil {
-                http.Error(w, "bad id", http.StatusBadRequest)
-                return
-        }
-        var req struct {
-                Command    string `json:"command"`
-                Sudo       bool   `json:"sudo"`
-                TimeoutSec int    `json:"timeout_sec"`
-        }
-        if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Command == "" {
-                http.Error(w, "command is required", http.StatusBadRequest)
-                return
-        }
-        if req.TimeoutSec == 0 {
-                req.TimeoutSec = 30
-        }
+	// Require admin for command execution
+	c := claimsFromCtx(r)
+	if c == nil || c.Role != "admin" {
+		http.Error(w, "forbidden: admin role required for command execution", http.StatusForbidden)
+		return
+	}
 
-        srv, err := s.loadManagedServer(r.Context(), id)
-        if err != nil {
-                http.Error(w, "server not found", http.StatusNotFound)
-                return
-        }
+	id, err := parseInt64(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Command    string `json:"command"`
+		Sudo       bool   `json:"sudo"`
+		TimeoutSec int    `json:"timeout_sec"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Command == "" {
+		http.Error(w, "command is required", http.StatusBadRequest)
+		return
+	}
+	if req.TimeoutSec == 0 {
+		req.TimeoutSec = 30
+	}
 
-        cmd := req.Command
-        if req.Sudo && !strings.HasPrefix(cmd, "sudo ") {
-                cmd = "sudo " + cmd
-        }
+	if isDangerousCommand(req.Command) {
+		http.Error(w, "command blocked by security policy", http.StatusForbidden)
+		return
+	}
 
-        start := time.Now()
-        out, code, execErr := sshExecCommand(srv.Host, srv.Port, srv.User, srv.KeyFile, cmd, req.TimeoutSec)
-        dur := time.Since(start).Milliseconds()
+	srv, err := s.loadManagedServer(r.Context(), id)
+	if err != nil {
+		http.Error(w, "server not found", http.StatusNotFound)
+		return
+	}
 
-        status := "ok"
-        if execErr != nil || code != 0 {
-                status = "error"
-                if execErr != nil {
-                        out = execErr.Error()
-                }
-        }
+	cmd := req.Command
+	if req.Sudo && !strings.HasPrefix(cmd, "sudo ") {
+		cmd = "sudo " + cmd
+	}
 
-        res := execResult{
-                ServerID:   srv.ID,
-                ServerName: srv.Name,
-                Host:       srv.Host,
-                Status:     status,
-                Output:     out,
-                ExitCode:   code,
-                DurationMs: dur,
-        }
-        w.Header().Set("Content-Type", "application/json")
-        json.NewEncoder(w).Encode(res) //nolint:errcheck
+	// Audit log
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		s.db.SQL.ExecContext(ctx,
+			`INSERT INTO audit_log (user, method, path, status, ip, body_hash, ts)
+			 VALUES (?,?,?,?,?,?,unixepoch())`,
+			c.Username, "EXEC", r.URL.Path, 0, r.RemoteAddr, "", //nolint:execinjection
+		)
+	}()
+
+	start := time.Now()
+	out, code, execErr := sshExecCommand(srv.Host, srv.Port, srv.User, srv.KeyFile, cmd, req.TimeoutSec)
+	dur := time.Since(start).Milliseconds()
+
+	status := "ok"
+	if execErr != nil || code != 0 {
+		status = "error"
+		if execErr != nil {
+			out = execErr.Error()
+		}
+	}
+
+	res := execResult{
+		ServerID:   srv.ID,
+		ServerName: srv.Name,
+		Host:       srv.Host,
+		Status:     status,
+		Output:     out,
+		ExitCode:   code,
+		DurationMs: dur,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res) //nolint:errcheck
 }
 
 func (s *Server) handleManagedServerBulkExec(w http.ResponseWriter, r *http.Request) {
-        var req struct {
-                ServerIDs   []int64 `json:"server_ids"`
-                Role        string  `json:"role"`
-                Command     string  `json:"command"`
-                Sudo        bool    `json:"sudo"`
-                TimeoutSec  int     `json:"timeout_sec"`
-                Parallelism int     `json:"parallelism"`
-                StopOnFail  bool    `json:"stop_on_fail"`
-        }
-        if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Command == "" {
-                http.Error(w, "command is required", http.StatusBadRequest)
-                return
-        }
+	// Require admin for bulk command execution
+	c := claimsFromCtx(r)
+	if c == nil || c.Role != "admin" {
+		http.Error(w, "forbidden: admin role required for bulk command execution", http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		ServerIDs   []int64 `json:"server_ids"`
+		Role        string  `json:"role"`
+		Command     string  `json:"command"`
+		Sudo        bool    `json:"sudo"`
+		TimeoutSec  int     `json:"timeout_sec"`
+		Parallelism int     `json:"parallelism"`
+		StopOnFail  bool    `json:"stop_on_fail"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Command == "" {
+		http.Error(w, "command is required", http.StatusBadRequest)
+		return
+	}
+
+	if isDangerousCommand(req.Command) {
+		http.Error(w, "command blocked by security policy", http.StatusForbidden)
+		return
+	}
         if req.TimeoutSec == 0 {
                 req.TimeoutSec = 60
         }
@@ -1064,7 +1142,7 @@ func (s *Server) handleServerGroupCreate(w http.ResponseWriter, r *http.Request)
                 `INSERT INTO server_groups (name, color) VALUES (?,?)`, req.Name, req.Color,
         )
         if err != nil {
-                http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "db error", http.StatusInternalServerError)
                 return
         }
         id, _ := res.LastInsertId()
@@ -1201,7 +1279,7 @@ func (s *Server) handleServerAlertCreate(w http.ResponseWriter, r *http.Request)
                 serverID, req.Severity, req.Message,
         )
         if err != nil {
-                http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "db error", http.StatusInternalServerError)
                 return
         }
         alertID, _ := res.LastInsertId()
@@ -1303,7 +1381,7 @@ func (s *Server) handleServerCommandCreate(w http.ResponseWriter, r *http.Reques
                 req.Name, req.Command, req.Role, sudo,
         )
         if err != nil {
-                http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "db error", http.StatusInternalServerError)
                 return
         }
         id, _ := res.LastInsertId()

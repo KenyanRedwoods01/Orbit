@@ -18,6 +18,7 @@ import {
 } from './securityData'
 import styles from './SecurityPage.module.css'
 import { usePluginsStore } from '@/store/plugins'
+import { SecurityChecklistSection } from './SecurityChecklist'
 
 // ─────────────────────────────────────────────────────────
 // SVG Icons
@@ -46,7 +47,7 @@ const IcoCompliance = () => <svg viewBox="0 0 20 20" fill="none" stroke="current
 // ─────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────
-type SectionTab  = 'ssh' | 'ports' | 'cve' | 'compliance' | 'fail2ban' | 'crowdsec' | 'wazuh' | 'suricata' | 'clamav' | 'docker' | 'trivy' | 'auth'
+type SectionTab  = 'ssh' | 'ports' | 'cve' | 'compliance' | 'fail2ban' | 'crowdsec' | 'wazuh' | 'suricata' | 'clamav' | 'docker' | 'trivy' | 'auth' | 'checklist'
 type ViewMode    = 'list' | 'grid'
 type ModalTab    = 'overview' | 'remediation' | 'details'
 
@@ -381,6 +382,7 @@ export default function SecurityPage() {
           { id: 'docker',     label: 'Docker Sec',      icon: <IcoPorts />,     badge: null, badgeCrit: false,  pluginId: 'docker-security' },
           { id: 'trivy',      label: 'Trivy',           icon: <IcoCVE />,       badge: null, badgeCrit: false,  pluginId: 'trivy' },
           { id: 'auth',       label: 'Auth & MFA',      icon: <IcoCompliance />,badge: null, badgeCrit: false,  pluginId: null },
+          { id: 'checklist',  label: 'Sec Checklist',   icon: <IcoCheck />,     badge: null, badgeCrit: false,  pluginId: null },
         ] as { id: SectionTab; label: string; icon: React.ReactNode; badge: number|null; badgeCrit: boolean; pluginId: string|null }[])
           .filter(t => t.pluginId === null || pluginStatuses[t.pluginId] === 'enabled')
           .map(t => (
@@ -644,6 +646,9 @@ export default function SecurityPage() {
           </div>
         </div>
       )}
+
+      {/* ── Security Checklist ── */}
+      {tab === 'checklist' && <SecurityChecklistSection />}
 
       {/* ── Modals ── */}
       {selectedSSH && <SSHModal check={selectedSSH} onClose={() => setSelectedSSH(null)} />}

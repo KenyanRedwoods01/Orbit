@@ -12,6 +12,41 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// stripDangerousESC removes terminal escape sequences that could be abused
+// for command injection or information exfiltration (iTerm2 conductor protocol,
+// hyperlinks, clipboard access, etc.). It preserves normal ANSI color/graphics.
+func stripDangerousESC(data []byte) []byte {
+	var out []byte
+	for i := 0; i < len(data); i++ {
+		if data[i] == 0x1b { // ESC
+			if i+1 < len(data) {
+				switch data[i+1] {
+				case 'P', // DCS (Device Control String) — iTerm2 conductor, etc.
+					']', // OSC (Operating System Command) — hyperlinks, clipboard
+					'X', // SOS (Start of String)
+					'^', // PM (Privacy Message)
+					'_': // APC (Application Program Command)
+					// Skip until ST (String Terminator: ESC \ or 0x07 for OSC)
+					i += 2
+					for i < len(data) {
+						if data[i] == 0x07 {
+							break
+						}
+						if data[i] == 0x1b && i+1 < len(data) && data[i+1] == '\\' {
+							i += 2
+							break
+						}
+						i++
+					}
+					continue
+				}
+			}
+		}
+		out = append(out, data[i])
+	}
+	return out
+}
+
 // handleTerminalWS opens a WebSocket PTY session to a local shell.
 // Protocol (text frames):
 //
@@ -57,9 +92,10 @@ func (s *Server) handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 		for {
 			n, err := ptmx.Read(buf)
 			if n > 0 {
+				sanitized := stripDangerousESC(buf[:n])
 				msg, _ := json.Marshal(map[string]string{
 					"type": "output",
-					"data": string(buf[:n]),
+					"data": string(sanitized),
 				})
 				if writeErr := conn.WriteMessage(websocket.TextMessage, msg); writeErr != nil {
 					return
@@ -72,29 +108,61 @@ func (s *Server) handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// Main loop: read WebSocket input → PTY stdin
+	// Main loop: read WebSocket input → PTY stdin, with periodic session aliveness check
 	conn.SetReadDeadline(time.Time{})
+	sessionAliveTicker := time.NewTicker(30 * time.Second)
+	defer sessionAliveTicker.Stop()
+	type msgOrErr struct {
+		msg []byte
+		err error
+	}
+	readCh := make(chan msgOrErr, 4)
+	go func() {
+		for {
+			_, msg, err := conn.ReadMessage()
+			readCh <- msgOrErr{msg, err}
+			if err != nil {
+				return
+			}
+		}
+	}()
 	for {
-		_, msg, err := conn.ReadMessage()
-		if err != nil {
-			break
-		}
+		select {
+		case <-sessionAliveTicker.C:
+			// Verify session is still valid in DB
+			cookie, err := r.Cookie("orbit_session")
+			if err != nil {
+				return
+			}
+			tokenHash := hashSHA256Hex(cookie.Value)
+			var expiresAt int64
+			if s.db.SQL.QueryRowContext(r.Context(),
+				`SELECT expires_at FROM sessions WHERE token_hash=?`, tokenHash,
+			).Scan(&expiresAt); err != nil || expiresAt < time.Now().Unix() {
+				conn.WriteMessage(websocket.TextMessage, jsonMsg("exit", "session expired"))
+				return
+			}
+		case m := <-readCh:
+			if m.err != nil {
+				return
+			}
+			msg := m.msg
 
-		// Detect resize JSON: {"type":"resize","cols":N,"rows":N}
-		var ctrl struct {
-			Type string `json:"type"`
-			Cols uint16 `json:"cols"`
-			Rows uint16 `json:"rows"`
-		}
-		if json.Unmarshal(msg, &ctrl) == nil && ctrl.Type == "resize" && ctrl.Cols > 0 && ctrl.Rows > 0 {
-			pty.Setsize(ptmx, &pty.Winsize{Rows: ctrl.Rows, Cols: ctrl.Cols}) //nolint:errcheck
-			continue
-		}
+			// Detect resize JSON: {"type":"resize","cols":N,"rows":N}
+			var ctrl struct {
+				Type string `json:"type"`
+				Cols uint16 `json:"cols"`
+				Rows uint16 `json:"rows"`
+			}
+			if json.Unmarshal(msg, &ctrl) == nil && ctrl.Type == "resize" && ctrl.Cols > 0 && ctrl.Rows > 0 {
+				pty.Setsize(ptmx, &pty.Winsize{Rows: ctrl.Rows, Cols: ctrl.Cols}) //nolint:errcheck
+				continue
+			}
 
-		// Forward raw input to PTY
-		if _, err := ptmx.Write(msg); err != nil {
-			break
-		}
+			// Forward raw input to PTY
+			if _, err := ptmx.Write(msg); err != nil {
+				return
+			}
 	}
 }
 

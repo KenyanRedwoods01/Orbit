@@ -21,6 +21,14 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('error', (_err, _req, res) => {
+            if ('writeHead' in res && typeof res.writeHead === 'function') {
+              res.writeHead(503, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ error: 'backend_unavailable', message: 'Backend is starting up, please wait.' }))
+            }
+          })
+        },
       },
       '/ws': {
         target: 'ws://localhost:3000',

@@ -1,0 +1,46 @@
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    groups:
+      go-deps:
+        patterns: ["*"]
+    # Set to 0: Dependabot checks for updates and shows Security alerts but
+    # does NOT auto-create branches or PRs. Maintainers review alerts in the
+    # Security tab and manually trigger fixes as needed.
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "go"
+
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    groups:
+      npm-deps:
+        patterns: ["*"]
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "javascript"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    groups:
+      actions:
+        patterns: ["*"]
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "github-actions"

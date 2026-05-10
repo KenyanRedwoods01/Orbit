@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/store/auth'
+import { useSetupStatus } from '@/hooks/useSetupStatus'
 import Layout from '@/components/layout/Layout'
 import LoginPage from '@/pages/login/LoginPage'
 import SetupPage from '@/pages/login/SetupPage'
@@ -38,6 +38,7 @@ import AlertRulesPage from '@/pages/alerts/AlertRulesPage'
 import DiskPartitionPage from '@/pages/metrics/DiskPartitionPage'
 import PortsPage from '@/pages/ports/PortsPage'
 import DatabasePage from '@/pages/database/DatabasePage'
+import ProfilePage from '@/pages/profile/ProfilePage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const user = useAuthStore(s => s.user)
@@ -45,36 +46,58 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+const loadingStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  height: '100vh',
+  flexDirection: 'column',
+  gap: 16,
+  fontFamily: 'system-ui, sans-serif',
+  color: '#888',
+  fontSize: 14,
+}
+
 export default function App() {
-  const [setupRequired, setSetupRequired] = useState<boolean | null>(null)
+  const { setupRequired, loading, error, retryCount, retry } = useSetupStatus()
 
-  useEffect(() => {
-    const checkSetup = () => {
-      fetch('/api/setup/status')
-        .then(r => {
-          if (!r.ok) throw new Error('not ok')
-          return r.json()
-        })
-        .then((d: { setup_required?: boolean }) => {
-          if (typeof d?.setup_required !== 'boolean') throw new Error('invalid')
-          setSetupRequired(d.setup_required)
-        })
-        .catch(() => {
-          // Backend not ready yet, or invalid response — retry after a short delay
-          setTimeout(checkSetup, 1500)
-        })
-    }
-    checkSetup()
-  }, [])
+  if (loading) {
+    return (
+      <div style={loadingStyle} data-testid="setup-loading">
+        <span>
+          {retryCount > 0
+            ? `Connecting to server… (attempt ${retryCount + 1} of 20)`
+            : 'Connecting to server…'}
+        </span>
+      </div>
+    )
+  }
 
-  if (setupRequired === null) return null
+  if (error) {
+    return (
+      <div style={loadingStyle} data-testid="setup-error">
+        <div style={{ color: '#f44336', maxWidth: 400, textAlign: 'center', lineHeight: 1.5 }}>
+          {error}
+        </div>
+        <button
+          onClick={retry}
+          style={{
+            padding: '6px 20px', borderRadius: 6, fontSize: 13, cursor: 'pointer',
+            background: '#23272e', color: '#e0e0e0', border: '1px solid #444',
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
 
   if (setupRequired) {
     return (
       <Routes>
         <Route
           path="/setup"
-          element={<SetupPage onComplete={() => setSetupRequired(false)} />}
+          element={<SetupPage onComplete={() => retry()} />}
         />
         <Route path="*" element={<Navigate to="/setup" replace />} />
       </Routes>
@@ -128,6 +151,7 @@ export default function App() {
         <Route path="metrics/disk/:mount"  element={<DiskPartitionPage />} />
         <Route path="ports"                element={<PortsPage />} />
         <Route path="database"             element={<DatabasePage />} />
+        <Route path="profile"              element={<ProfilePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

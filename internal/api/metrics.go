@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -16,7 +17,23 @@ import (
 )
 
 var wsUpgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin: func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return false
+		}
+		host := r.Host
+		originHost := strings.TrimPrefix(strings.TrimPrefix(origin, "https://"), "http://")
+		originHost = strings.Split(originHost, ":")[0]
+		requestHost := strings.Split(host, ":")[0]
+		if strings.EqualFold(originHost, requestHost) {
+			return true
+		}
+		if originHost == "localhost" || originHost == "127.0.0.1" {
+			return true
+		}
+		return false
+	},
 }
 
 func (s *Server) handleMetricsSnapshot(w http.ResponseWriter, r *http.Request) {

@@ -165,18 +165,28 @@ func (s *Server) handleDBConnectionCreate(w http.ResponseWriter, r *http.Request
         if req.SSLMode == "" {
                 req.SSLMode = "prefer"
         }
-        now := time.Now().Unix()
-        res, err := s.db.SQL.ExecContext(r.Context(), `
-                INSERT INTO database_connections (name, type, host, port, username, password, database_name, ssl_mode, extra, status, created_at)
-                VALUES (?,?,?,?,?,?,?,?,?,'offline',?)
-        `, req.Name, req.Type, req.Host, req.Port, req.Username, req.Password, req.DatabaseName, req.SSLMode, req.Extra, now)
-        if err != nil {
-                jsonError(w, "db error", http.StatusInternalServerError)
-                return
-        }
-        id, _ := res.LastInsertId()
-        w.WriteHeader(http.StatusCreated)
-        jsonOK(w, map[string]int64{"id": id})
+	// Encrypt password at rest
+	encPwd := ""
+	if req.Password != "" {
+		encPwd, err = encrypt(req.Password, s.cfg.SecretKey)
+		if err != nil {
+			jsonError(w, "encryption failed", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	now := time.Now().Unix()
+	res, err := s.db.SQL.ExecContext(r.Context(), `
+		INSERT INTO database_connections (name, type, host, port, username, password, database_name, ssl_mode, extra, status, created_at)
+		VALUES (?,?,?,?,?,?,?,?,?,'offline',?)
+	`, req.Name, req.Type, req.Host, req.Port, req.Username, encPwd, req.DatabaseName, req.SSLMode, req.Extra, now)
+	if err != nil {
+		jsonError(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	id, _ := res.LastInsertId()
+	w.WriteHeader(http.StatusCreated)
+	jsonOK(w, map[string]int64{"id": id})
 }
 
 func (s *Server) handleDBConnectionUpdate(w http.ResponseWriter, r *http.Request) {
@@ -199,10 +209,13 @@ func (s *Server) handleDBConnectionUpdate(w http.ResponseWriter, r *http.Request
                 return
         }
 
-        // Only update password if provided
-        if req.Password != "" {
-                s.db.SQL.ExecContext(r.Context(), `UPDATE database_connections SET password=? WHERE id=?`, req.Password, id) //nolint:errcheck
-        }
+	// Only update password if provided (encrypt at rest)
+	if req.Password != "" {
+		encPwd, encErr := encrypt(req.Password, s.cfg.SecretKey)
+		if encErr == nil {
+			s.db.SQL.ExecContext(r.Context(), `UPDATE database_connections SET password=? WHERE id=?`, encPwd, id) //nolint:errcheck
+		}
+	}
 
         _, err := s.db.SQL.ExecContext(r.Context(), `
                 UPDATE database_connections SET name=?, type=?, host=?, port=?, username=?, database_name=?, ssl_mode=?, extra=?
@@ -283,7 +296,7 @@ func (s *Server) handleDBListDatabases(w http.ResponseWriter, r *http.Request) {
 
         dbs, err := listDatabases(r.Context(), *c)
         if err != nil {
-                jsonOK(w, map[string]interface{}{"error": err.Error(), "databases": []DBDatabase{}})
+                jsonOK(w, map[string]interface{}{"error": "failed to list databases", "databases": []DBDatabase{}})
                 return
         }
         jsonOK(w, map[string]interface{}{"databases": dbs})
@@ -302,9 +315,17 @@ func (s *Server) handleDBListTables(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
+        // Validate dbName before passing to listTables (prevents SQL identifier injection)
+        if dbName != "" {
+                if err := validateDBIdentifier(dbName); err != nil {
+                        jsonError(w, "invalid database name", http.StatusBadRequest)
+                        return
+                }
+        }
         tables, err := listTables(r.Context(), *c, dbName)
         if err != nil {
-                jsonOK(w, map[string]interface{}{"error": err.Error(), "tables": []DBTable{}})
+                // Do not leak internal error details; log is sufficient
+                jsonOK(w, map[string]interface{}{"error": "failed to list tables", "tables": []DBTable{}})
                 return
         }
         jsonOK(w, map[string]interface{}{"tables": tables})
@@ -324,9 +345,22 @@ func (s *Server) handleDBListColumns(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
+        // Validate identifiers before passing to listColumns
+        if tableName != "" {
+                if err := validateDBIdentifier(tableName); err != nil {
+                        jsonError(w, "invalid table name", http.StatusBadRequest)
+                        return
+                }
+        }
+        if dbName != "" {
+                if err := validateDBIdentifier(dbName); err != nil {
+                        jsonError(w, "invalid database name", http.StatusBadRequest)
+                        return
+                }
+        }
         cols, err := listColumns(r.Context(), *c, dbName, tableName)
         if err != nil {
-                jsonOK(w, map[string]interface{}{"error": err.Error(), "columns": []DBColumn{}})
+                jsonOK(w, map[string]interface{}{"error": "failed to list columns", "columns": []DBColumn{}})
                 return
         }
         jsonOK(w, map[string]interface{}{"columns": cols})
@@ -359,14 +393,26 @@ func (s *Server) handleDBTableData(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
+        // Validate table/db identifiers before interpolation — parameterization is
+        // not possible for SQL identifiers, so we use a strict allowlist regex.
+        if err := validateDBIdentifier(tableName); err != nil {
+                jsonError(w, "invalid table name", http.StatusBadRequest)
+                return
+        }
+        if dbName != "" {
+                if err := validateDBIdentifier(dbName); err != nil {
+                        jsonError(w, "invalid database name", http.StatusBadRequest)
+                        return
+                }
+        }
         var query string
         switch c.Type {
         case "postgresql":
-                query = fmt.Sprintf(`SELECT * FROM %q LIMIT %d OFFSET %d`, tableName, limit, offset)
+                query = fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", quotePGIdent(tableName), limit, offset)
         case "mysql", "mariadb":
-                query = fmt.Sprintf("SELECT * FROM `%s` LIMIT %d OFFSET %d", tableName, limit, offset)
+                query = fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", quoteMyIdent(tableName), limit, offset)
         case "sqlite":
-                query = fmt.Sprintf("SELECT * FROM \"%s\" LIMIT %d OFFSET %d", tableName, limit, offset)
+                query = fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", quoteSQLiteIdent(tableName), limit, offset)
         default:
                 jsonError(w, "unsupported database type", http.StatusBadRequest)
                 return
@@ -532,15 +578,23 @@ func (s *Server) handleDBConnectionRefresh(w http.ResponseWriter, r *http.Reques
 // ── Helper: get connection by ID ───────────────────────────────────────────────
 
 func (s *Server) dbConnByID(ctx context.Context, id int64) *DBConnection {
-        var c DBConnection
-        err := s.db.SQL.QueryRowContext(ctx, `
-                SELECT id, name, type, host, port, username, password, database_name, ssl_mode, extra, status, version
-                FROM database_connections WHERE id=?
-        `, id).Scan(&c.ID, &c.Name, &c.Type, &c.Host, &c.Port, &c.Username, &c.Password, &c.DatabaseName, &c.SSLMode, &c.Extra, &c.Status, &c.Version)
-        if err != nil {
-                return nil
-        }
-        return &c
+	var c DBConnection
+	err := s.db.SQL.QueryRowContext(ctx, `
+		SELECT id, name, type, host, port, username, password, database_name, ssl_mode, extra, status, version
+		FROM database_connections WHERE id=?
+	`, id).Scan(&c.ID, &c.Name, &c.Type, &c.Host, &c.Port, &c.Username, &c.Password, &c.DatabaseName, &c.SSLMode, &c.Extra, &c.Status, &c.Version)
+	if err != nil {
+		return nil
+	}
+	// Decrypt password for internal use
+	if c.Password != "" {
+		dec, decErr := decrypt(c.Password, s.cfg.SecretKey)
+		if decErr != nil {
+			return nil
+		}
+		c.Password = dec
+	}
+	return &c
 }
 
 // ── System-tool database operations ───────────────────────────────────────────
@@ -567,6 +621,7 @@ func testDBConnection(ctx context.Context, c DBConnection) (string, error) {
         case "mysql", "mariadb":
                 args := mysqlArgs(c, []string{"-e", "SELECT VERSION()", "--skip-column-names", "--batch"})
                 cmd := exec.CommandContext(ctx, "mysql", args...)
+                cmd.Env = append(cmd.Environ(), mysqlEnv(c)...)
                 out, err := cmd.Output()
                 if err != nil {
                         return "", fmt.Errorf("mysql: %s", stderr(err))
@@ -576,6 +631,7 @@ func testDBConnection(ctx context.Context, c DBConnection) (string, error) {
         case "redis":
                 args := redisArgs(c, []string{"PING"})
                 cmd := exec.CommandContext(ctx, "redis-cli", args...)
+                cmd.Env = append(cmd.Environ(), redisEnv(c)...)
                 out, err := cmd.Output()
                 if err != nil {
                         return "", fmt.Errorf("redis-cli: %s", stderr(err))
@@ -585,6 +641,7 @@ func testDBConnection(ctx context.Context, c DBConnection) (string, error) {
                 }
                 // Get version
                 verCmd := exec.CommandContext(ctx, "redis-cli", append(redisArgs(c, nil), "INFO", "server")...)
+                verCmd.Env = append(verCmd.Environ(), redisEnv(c)...)
                 verOut, _ := verCmd.Output()
                 for _, line := range strings.Split(string(verOut), "\n") {
                         if strings.HasPrefix(line, "redis_version:") {
@@ -607,6 +664,7 @@ func testDBConnection(ctx context.Context, c DBConnection) (string, error) {
         case "mongodb":
                 uri := mongoURI(c)
                 cmd := exec.CommandContext(ctx, "mongosh", "--quiet", "--eval", "db.version()", uri)
+                cmd.Env = append(cmd.Environ(), mongoEnv(c)...)
                 out, err := cmd.Output()
                 if err != nil {
                         return "", fmt.Errorf("mongosh: %s", stderr(err))
@@ -656,6 +714,7 @@ func listDatabases(ctx context.Context, c DBConnection) ([]DBDatabase, error) {
                 query := `SELECT schema_name, COALESCE(SUM(data_length+index_length),0) FROM information_schema.SCHEMATA LEFT JOIN information_schema.TABLES ON table_schema=schema_name WHERE schema_name NOT IN ('information_schema','performance_schema','sys') GROUP BY schema_name ORDER BY schema_name`
                 args := mysqlArgs(c, []string{"-e", query, "--skip-column-names", "--batch", "information_schema"})
                 cmd := exec.CommandContext(ctx, "mysql", args...)
+                cmd.Env = append(cmd.Environ(), mysqlEnv(c)...)
                 out, err := cmd.Output()
                 if err != nil {
                         return nil, fmt.Errorf("mysql: %s", stderr(err))
@@ -680,6 +739,7 @@ func listDatabases(ctx context.Context, c DBConnection) ([]DBDatabase, error) {
                 // Redis doesn't have databases in the traditional sense - list numbered DBs
                 args := redisArgs(c, []string{"INFO", "keyspace"})
                 cmd := exec.CommandContext(ctx, "redis-cli", args...)
+                cmd.Env = append(cmd.Environ(), redisEnv(c)...)
                 out, _ := cmd.Output()
                 for _, line := range strings.Split(string(out), "\n") {
                         if strings.HasPrefix(line, "db") {
@@ -702,6 +762,7 @@ func listDatabases(ctx context.Context, c DBConnection) ([]DBDatabase, error) {
                 uri := mongoURI(c)
                 cmd := exec.CommandContext(ctx, "mongosh", "--quiet", "--eval",
                         `db.adminCommand({listDatabases:1}).databases.forEach(d=>print(d.name+"\t"+d.sizeOnDisk))`, uri)
+                cmd.Env = append(cmd.Environ(), mongoEnv(c)...)
                 out, err := cmd.Output()
                 if err != nil {
                         return nil, fmt.Errorf("mongosh: %s", stderr(err))
@@ -733,7 +794,12 @@ func listTables(ctx context.Context, c DBConnection, dbName string) ([]DBTable, 
 
         switch c.Type {
         case "postgresql":
-                query := `SELECT table_name, table_schema, table_type, COALESCE(s.n_live_tup,0), COALESCE(pg_total_relation_size(quote_ident(t.table_schema)||'.'||quote_ident(t.table_name)),0) FROM information_schema.tables t LEFT JOIN pg_stat_user_tables s ON t.table_name=s.relname AND t.table_schema=s.schemaname WHERE t.table_catalog='` + dbName + `' AND t.table_schema NOT IN ('pg_catalog','information_schema') ORDER BY t.table_schema, t.table_name`
+                if dbName != "" {
+                        if err := validateDBIdentifier(dbName); err != nil {
+                                return nil, fmt.Errorf("invalid database name: %w", err)
+                        }
+                }
+                query := fmt.Sprintf(`SELECT table_name, table_schema, table_type, COALESCE(s.n_live_tup,0), COALESCE(pg_total_relation_size(quote_ident(t.table_schema)||'.'||quote_ident(t.table_name)),0) FROM information_schema.tables t LEFT JOIN pg_stat_user_tables s ON t.table_name=s.relname AND t.table_schema=s.schemaname WHERE t.table_catalog='%s' AND t.table_schema NOT IN ('pg_catalog','information_schema') ORDER BY t.table_schema, t.table_name`, dbName)
                 dsn := pgDSNwithDB(c, dbName)
                 cmd := exec.CommandContext(ctx, "psql", dsn, "-c", query, "-A", "-F", "\t", "--no-align", "-t")
                 cmd.Env = append(cmd.Environ(), pgEnv(c)...)
@@ -760,9 +826,10 @@ func listTables(ctx context.Context, c DBConnection, dbName string) ([]DBTable, 
                 }
 
         case "mysql", "mariadb":
-                query := fmt.Sprintf("SELECT table_name, table_type, COALESCE(table_rows,0), COALESCE(data_length+index_length,0) FROM information_schema.tables WHERE table_schema='%s' ORDER BY table_name", dbName)
+                query := fmt.Sprintf("SELECT table_name, table_type, COALESCE(table_rows,0), COALESCE(data_length+index_length,0) FROM information_schema.tables WHERE table_schema=%s ORDER BY table_name", quoteMyIdent(dbName))
                 args := mysqlArgs(c, []string{"-e", query, "--skip-column-names", "--batch", dbName})
                 cmd := exec.CommandContext(ctx, "mysql", args...)
+                cmd.Env = append(cmd.Environ(), mysqlEnv(c)...)
                 out, err := cmd.Output()
                 if err != nil {
                         return nil, fmt.Errorf("mysql: %s", stderr(err))
@@ -793,7 +860,7 @@ func listTables(ctx context.Context, c DBConnection, dbName string) ([]DBTable, 
                 }
                 for _, name := range strings.Fields(string(out)) {
                         // Get row count
-                        countCmd := exec.CommandContext(ctx, "sqlite3", c.Host, fmt.Sprintf("SELECT COUNT(*) FROM \"%s\"", name))
+                        countCmd := exec.CommandContext(ctx, "sqlite3", c.Host, fmt.Sprintf("SELECT COUNT(*) FROM %s", quoteSQLiteIdent(name)))
                         countOut, _ := countCmd.Output()
                         var rows int64
                         fmt.Sscanf(strings.TrimSpace(string(countOut)), "%d", &rows)
@@ -808,6 +875,7 @@ func listTables(ctx context.Context, c DBConnection, dbName string) ([]DBTable, 
                         args = append(redisArgs(c, nil), "-n", dbNum, "KEYS", "*")
                 }
                 cmd := exec.CommandContext(ctx, "redis-cli", args...)
+                cmd.Env = append(cmd.Environ(), redisEnv(c)...)
                 out, _ := cmd.Output()
                 for _, key := range strings.Split(strings.TrimSpace(string(out)), "\n") {
                         if key != "" {
@@ -816,9 +884,13 @@ func listTables(ctx context.Context, c DBConnection, dbName string) ([]DBTable, 
                 }
 
         case "mongodb":
+                if err := validateDBIdentifier(dbName); err != nil {
+                        return nil, fmt.Errorf("invalid database name: %w", err)
+                }
                 uri := mongoURI(c)
-                script := fmt.Sprintf(`db.getSiblingDB('%s').getCollectionNames().forEach(n=>{var c=db.getSiblingDB('%s').getCollection(n);print(n+"\t"+c.countDocuments())})`, dbName, dbName)
+		script := fmt.Sprintf(`db.getSiblingDB('%s').getCollectionNames().forEach(n=>{var c=db.getSiblingDB('%s').getCollection(n);print(n+"\t"+c.countDocuments())})`, dbName, dbName)
                 cmd := exec.CommandContext(ctx, "mongosh", "--quiet", "--eval", script, uri)
+                cmd.Env = append(cmd.Environ(), mongoEnv(c)...)
                 out, err := cmd.Output()
                 if err != nil {
                         return nil, fmt.Errorf("mongosh: %s", stderr(err))
@@ -850,6 +922,12 @@ func listColumns(ctx context.Context, c DBConnection, dbName, tableName string) 
 
         switch c.Type {
         case "postgresql":
+                if err := validateDBIdentifier(tableName); err != nil {
+                        return nil, fmt.Errorf("invalid table name: %w", err)
+                }
+                if err := validateDBIdentifier(dbName); err != nil {
+                        return nil, fmt.Errorf("invalid database name: %w", err)
+                }
                 query := fmt.Sprintf(`SELECT c.column_name, c.data_type, c.is_nullable, COALESCE(c.column_default,''), c.character_maximum_length, COALESCE(tc.constraint_type,'') FROM information_schema.columns c LEFT JOIN information_schema.key_column_usage kcu ON c.column_name=kcu.column_name AND c.table_name=kcu.table_name AND c.table_schema=kcu.table_schema LEFT JOIN information_schema.table_constraints tc ON kcu.constraint_name=tc.constraint_name AND kcu.table_schema=tc.table_schema WHERE c.table_name='%s' AND c.table_catalog='%s' ORDER BY c.ordinal_position`, tableName, dbName)
                 dsn := pgDSNwithDB(c, dbName)
                 cmd := exec.CommandContext(ctx, "psql", dsn, "-c", query, "-A", "-F", "\t", "--no-align", "-t")
@@ -877,9 +955,16 @@ func listColumns(ctx context.Context, c DBConnection, dbName, tableName string) 
                 }
 
         case "mysql", "mariadb":
-                query := fmt.Sprintf("DESCRIBE `%s`.`%s`", dbName, tableName)
+                if err := validateDBIdentifier(tableName); err != nil {
+			return nil, fmt.Errorf("invalid table name: %w", err)
+		}
+		if err := validateDBIdentifier(dbName); err != nil {
+			return nil, fmt.Errorf("invalid database name: %w", err)
+		}
+                query := fmt.Sprintf("DESCRIBE %s.%s", quoteMyIdent(dbName), quoteMyIdent(tableName))
                 args := mysqlArgs(c, []string{"-e", query, "--skip-column-names", "--batch"})
                 cmd := exec.CommandContext(ctx, "mysql", args...)
+                cmd.Env = append(cmd.Environ(), mysqlEnv(c)...)
                 out, err := cmd.Output()
                 if err != nil {
                         return nil, fmt.Errorf("mysql: %s", stderr(err))
@@ -899,7 +984,10 @@ func listColumns(ctx context.Context, c DBConnection, dbName, tableName string) 
                 }
 
         case "sqlite":
-                cmd := exec.CommandContext(ctx, "sqlite3", c.Host, fmt.Sprintf("PRAGMA table_info('%s')", tableName))
+                if err := validateDBIdentifier(tableName); err != nil {
+			return nil, fmt.Errorf("invalid table name: %w", err)
+		}
+		cmd := exec.CommandContext(ctx, "sqlite3", c.Host, fmt.Sprintf("PRAGMA table_info(%s)", quoteSQLiteIdent(tableName)))
                 out, err := cmd.Output()
                 if err != nil {
                         return nil, fmt.Errorf("sqlite3: %s", stderr(err))
@@ -966,6 +1054,7 @@ func executeQuery(ctx context.Context, c DBConnection, dbName, query string) Que
         case "mysql", "mariadb":
                 args := mysqlArgs(c, []string{"-e", query, "--batch", "--skip-column-names", dbName})
                 cmd := exec.CommandContext(ctx, "mysql", args...)
+                cmd.Env = append(cmd.Environ(), mysqlEnv(c)...)
                 out, err := cmd.Output()
                 result.ExecutionTime = float64(time.Since(start).Microseconds()) / 1000
                 if err != nil {
@@ -977,6 +1066,7 @@ func executeQuery(ctx context.Context, c DBConnection, dbName, query string) Que
         case "redis":
                 args := redisArgs(c, strings.Fields(query))
                 cmd := exec.CommandContext(ctx, "redis-cli", args...)
+                cmd.Env = append(cmd.Environ(), redisEnv(c)...)
                 out, err := cmd.Output()
                 result.ExecutionTime = float64(time.Since(start).Microseconds()) / 1000
                 if err != nil {
@@ -1015,8 +1105,8 @@ func pgDSN(c DBConnection) string {
         if db == "" {
                 db = "postgres"
         }
-        return fmt.Sprintf("postgresql://%s:%s@%s:%d/%s?sslmode=%s",
-                c.Username, c.Password, host, c.Port, db, sslMode(c.SSLMode))
+        return fmt.Sprintf("postgresql://%s@%s:%d/%s?sslmode=%s",
+                c.Username, host, c.Port, db, sslMode(c.SSLMode))
 }
 
 func pgDSNwithDB(c DBConnection, dbName string) string {
@@ -1024,8 +1114,8 @@ func pgDSNwithDB(c DBConnection, dbName string) string {
         if host == "" {
                 host = "localhost"
         }
-        return fmt.Sprintf("postgresql://%s:%s@%s:%d/%s?sslmode=%s",
-                c.Username, c.Password, host, c.Port, dbName, sslMode(c.SSLMode))
+        return fmt.Sprintf("postgresql://%s@%s:%d/%s?sslmode=%s",
+                c.Username, host, c.Port, dbName, sslMode(c.SSLMode))
 }
 
 func pgEnv(c DBConnection) []string {
@@ -1041,9 +1131,12 @@ func mysqlArgs(c DBConnection, extra []string) []string {
                 "-h", host,
                 "-P", strconv.Itoa(c.Port),
                 "-u", c.Username,
-                "-p" + c.Password,
         }
         return append(args, extra...)
+}
+
+func mysqlEnv(c DBConnection) []string {
+        return []string{"MYSQL_PWD=" + c.Password}
 }
 
 func redisArgs(c DBConnection, extra []string) []string {
@@ -1052,10 +1145,14 @@ func redisArgs(c DBConnection, extra []string) []string {
                 host = "localhost"
         }
         args := []string{"-h", host, "-p", strconv.Itoa(c.Port)}
-        if c.Password != "" {
-                args = append(args, "-a", c.Password)
-        }
         return append(args, extra...)
+}
+
+func redisEnv(c DBConnection) []string {
+        if c.Password != "" {
+                return []string{"REDISCLI_AUTH=" + c.Password}
+        }
+        return nil
 }
 
 func mongoURI(c DBConnection) string {
@@ -1063,10 +1160,17 @@ func mongoURI(c DBConnection) string {
         if host == "" {
                 host = "localhost"
         }
-        if c.Username != "" && c.Password != "" {
-                return fmt.Sprintf("mongodb://%s:%s@%s:%d/%s", c.Username, c.Password, host, c.Port, c.DatabaseName)
+        if c.Username != "" {
+                return fmt.Sprintf("mongodb://%s@%s:%d/%s", c.Username, host, c.Port, c.DatabaseName)
         }
         return fmt.Sprintf("mongodb://%s:%d/%s", host, c.Port, c.DatabaseName)
+}
+
+func mongoEnv(c DBConnection) []string {
+        if c.Password != "" {
+                return []string{"MONGODB_PASSWORD=" + c.Password}
+        }
+        return nil
 }
 
 func sslMode(mode string) string {
@@ -1337,6 +1441,10 @@ func listIndexes(ctx context.Context, c DBConnection, dbName, tableName string) 
 
 	switch c.Type {
 	case "postgresql":
+		if err := validateDBIdentifier(tableName); err != nil {
+			break // skip invalid identifiers
+		}
+                safeTablePG := tableName
 		query := fmt.Sprintf(`
 			SELECT i.relname as index_name,
 			       ix.indisprimary,
@@ -1354,7 +1462,7 @@ func listIndexes(ctx context.Context, c DBConnection, dbName, tableName string) 
 			JOIN pg_am am ON i.relam = am.oid
 			WHERE t.relkind = 'r' AND t.relname = '%s'
 			ORDER BY ix.indisprimary DESC, i.relname
-		`, strings.ReplaceAll(tableName, "'", "''"))
+		`, safeTablePG)
 		dsn := pgDSNwithDB(c, dbName)
 		out, err := runPSQL(ctx, c, dsn, query)
 		if err == nil {
@@ -1378,11 +1486,17 @@ func listIndexes(ctx context.Context, c DBConnection, dbName, tableName string) 
 		}
 
 	case "mysql", "mariadb":
-		query := fmt.Sprintf("SHOW INDEX FROM `%s` FROM `%s`",
-			strings.ReplaceAll(tableName, "`", "``"),
-			strings.ReplaceAll(dbName, "`", "``"))
+		if validateDBIdentifier(tableName) != nil || validateDBIdentifier(dbName) != nil {
+			break // skip invalid identifiers
+		}
+		query := fmt.Sprintf("SHOW INDEX FROM %s FROM %s",
+			quoteMyIdent(tableName),
+			quoteMyIdent(dbName))
 		args := mysqlArgs(c, []string{"-e", query, "--skip-column-names", "--batch"})
-		out, err := runCmd(ctx, "mysql", args...)
+		cmd := exec.CommandContext(ctx, "mysql", args...)
+		cmd.Env = append(cmd.Environ(), mysqlEnv(c)...)
+		outB, err := cmd.Output()
+		out := string(outB)
 		if err == nil {
 			idxMap := map[string]*DBIndex{}
 			var idxOrder []string
@@ -1413,7 +1527,10 @@ func listIndexes(ctx context.Context, c DBConnection, dbName, tableName string) 
 		}
 
 	case "sqlite":
-		out, err := runCmd(ctx, "sqlite3", c.Host, fmt.Sprintf("PRAGMA index_list('%s')", strings.ReplaceAll(tableName, "'", "''")))
+		if validateDBIdentifier(tableName) != nil {
+			break // skip invalid identifiers
+		}
+		out, err := runCmd(ctx, "sqlite3", c.Host, fmt.Sprintf("PRAGMA index_list(%s)", quoteSQLiteIdent(tableName)))
 		if err == nil {
 			for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 				parts := strings.Split(line, "|")
@@ -1428,7 +1545,10 @@ func listIndexes(ctx context.Context, c DBConnection, dbName, tableName string) 
 				}
 				primary := origin == "pk"
 				// get columns
-				colOut, _ := runCmd(ctx, "sqlite3", c.Host, fmt.Sprintf("PRAGMA index_info('%s')", strings.ReplaceAll(name, "'", "''")))
+				if validateDBIdentifier(name) != nil {
+				continue
+			}
+			colOut, _ := runCmd(ctx, "sqlite3", c.Host, fmt.Sprintf("PRAGMA index_info(%s)", quoteSQLiteIdent(name)))
 				var cols []string
 				for _, cl := range strings.Split(strings.TrimSpace(colOut), "\n") {
 					cp := strings.Split(cl, "|")
