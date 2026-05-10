@@ -539,22 +539,25 @@ func (s *Server) handleSettingsExport(w http.ResponseWriter, r *http.Request) {
         }
         defer rows.Close()
 
-        allSettings := map[string]string{}
-        for rows.Next() {
-                var k, v string
-                rows.Scan(&k, &v) //nolint:errcheck
-                allSettings[k] = v
-        }
+	allSettings := map[string]string{}
+	for rows.Next() {
+		var k, v string
+		rows.Scan(&k, &v) //nolint:errcheck
+		// Only export allowed setting keys to prevent leaking secrets
+		if isAllowedSettingKey(k) {
+			allSettings[k] = v
+		}
+	}
 
-        export := map[string]interface{}{
-                "exported_at": time.Now().UTC().Format(time.RFC3339),
-                "version":     "1",
-                "settings":    allSettings,
-        }
+	export := map[string]interface{}{
+		"exported_at": time.Now().UTC().Format(time.RFC3339),
+		"version":     "1",
+		"settings":    allSettings,
+	}
 
-        w.Header().Set("Content-Type", "application/json")
-        w.Header().Set("Content-Disposition", `attachment; filename="orbit-config-export.json"`)
-        json.NewEncoder(w).Encode(export) //nolint:errcheck
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", `attachment; filename="orbit-config-export.json"`)
+	json.NewEncoder(w).Encode(export) //nolint:errcheck
 }
 
 func (s *Server) handleSettingsImport(w http.ResponseWriter, r *http.Request) {
@@ -573,15 +576,19 @@ func (s *Server) handleSettingsImport(w http.ResponseWriter, r *http.Request) {
         }
         defer tx.Rollback() //nolint:errcheck
 
-        for k, v := range req.Settings {
-                if _, err := tx.ExecContext(r.Context(),
-                        `INSERT INTO settings (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
-                        k, v,
-                ); err != nil {
-                        http.Error(w, "db error", http.StatusInternalServerError)
-                        return
-                }
-        }
+	for k, v := range req.Settings {
+		if !isAllowedSettingKey(k) {
+			http.Error(w, "forbidden: setting key '"+k+"' is not allowed", http.StatusForbidden)
+			return
+		}
+		if _, err := tx.ExecContext(r.Context(),
+			`INSERT INTO settings (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+			k, v,
+		); err != nil {
+			http.Error(w, "db error", http.StatusInternalServerError)
+			return
+		}
+	}
 
         if err := tx.Commit(); err != nil {
                 http.Error(w, "db error", http.StatusInternalServerError)
@@ -979,11 +986,12 @@ func (s *Server) handleSettingsBackupFileRestore(w http.ResponseWriter, r *http.
         }
         json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck
 
-        // Mark the run as restored in metadata
-        if runID, err := strconv.ParseInt(id, 10, 64); err == nil {
-                s.db.SQL.ExecContext(r.Context(), //nolint:errcheck
-                        `UPDATE backup_runs SET output = COALESCE(output,'') || ' [restored at `+time.Now().UTC().Format(time.RFC3339)+`]' WHERE id = ?`, runID)
-        }
+	// Mark the run as restored in metadata
+	if runID, err := strconv.ParseInt(id, 10, 64); err == nil {
+		restoreNote := " [restored at " + time.Now().UTC().Format(time.RFC3339) + "]"
+		s.db.SQL.ExecContext(r.Context(), //nolint:errcheck
+			`UPDATE backup_runs SET output = COALESCE(output,'') || ? WHERE id = ?`, restoreNote, runID)
+	}
 
         w.Header().Set("Content-Type", "application/json")
         json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck

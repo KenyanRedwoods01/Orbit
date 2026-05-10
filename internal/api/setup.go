@@ -82,7 +82,7 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 		req.Admin.Username, req.Admin.Email, hash,
 	)
 	if err != nil {
-		http.Error(w, "failed to create admin user: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to create admin user", http.StatusInternalServerError)
 		return
 	}
 

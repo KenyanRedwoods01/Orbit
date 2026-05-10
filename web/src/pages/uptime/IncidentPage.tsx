@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchUptimeIncident, resolveUptimeIncident } from '@/lib/api'
@@ -326,7 +327,7 @@ export default function IncidentPage() {
             {inc.severity.toUpperCase()}
           </span>
           <span className={styles.badgeCat}
-            dangerouslySetInnerHTML={{ __html: `<span style="display:inline-flex;align-items:center;gap:5px;width:12px;height:12px;flex-shrink:0">${causeIconSvg}</span>&nbsp;${catLabel}` }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(`<span style="display:inline-flex;align-items:center;gap:5px;width:12px;height:12px;flex-shrink:0">${causeIconSvg}</span>&nbsp;${catLabel}`) }}
           />
           {isOngoing && (
             <button

@@ -6,8 +6,10 @@ package db
 import (
         "database/sql"
         "fmt"
+        "log"
         "os"
         "path/filepath"
+        "strings"
 
         bolt "go.etcd.io/bbolt"
         _ "github.com/mattn/go-sqlite3"
@@ -79,9 +81,18 @@ func migrate(db *sql.DB) error {
                 `ALTER TABLE uptime_monitors ADD COLUMN ssl_expires_at INTEGER`,
                 `ALTER TABLE database_connections ADD COLUMN active_connections INTEGER NOT NULL DEFAULT 0`,
                 `ALTER TABLE database_connections ADD COLUMN uptime_seconds INTEGER NOT NULL DEFAULT 0`,
+                `ALTER TABLE users ADD COLUMN display_name TEXT NOT NULL DEFAULT ''`,
+                `ALTER TABLE users ADD COLUMN bio TEXT NOT NULL DEFAULT ''`,
+                `ALTER TABLE users ADD COLUMN avatar_color TEXT NOT NULL DEFAULT '#3b82f6'`,
         }
         for _, stmt := range alterations {
-                db.Exec(stmt) //nolint:errcheck — ignore "duplicate column" errors
+                if _, err := db.Exec(stmt); err != nil {
+                        // SQLite does not support IF NOT EXISTS on ALTER TABLE ADD COLUMN;
+                        // "duplicate column" errors are expected on restarts.
+                        if !strings.Contains(err.Error(), "duplicate column") {
+                                log.Printf("[db] migration warning: %v (stmt: %s)", err, stmt)
+                        }
+                }
         }
         return nil
 }
@@ -323,7 +334,7 @@ CREATE TABLE IF NOT EXISTS ssh_saved (
         name       TEXT NOT NULL,
         host       TEXT NOT NULL,
         port       INTEGER NOT NULL DEFAULT 22,
-        user       TEXT NOT NULL DEFAULT 'root',
+        user       TEXT NOT NULL DEFAULT 'orbit',
         auth_type  TEXT NOT NULL DEFAULT 'key',
         key_id     INTEGER REFERENCES ssh_keys(id) ON DELETE SET NULL,
         jump_host  TEXT,
@@ -511,7 +522,7 @@ CREATE TABLE IF NOT EXISTS managed_servers (
         name          TEXT NOT NULL UNIQUE,
         host          TEXT NOT NULL,
         port          INTEGER NOT NULL DEFAULT 22,
-        ssh_user      TEXT NOT NULL DEFAULT 'root',
+        ssh_user      TEXT NOT NULL DEFAULT 'orbit',
         auth_method   TEXT NOT NULL DEFAULT 'key',
         key_file      TEXT NOT NULL DEFAULT '',
         jump_host     TEXT NOT NULL DEFAULT '',

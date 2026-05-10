@@ -395,7 +395,7 @@ func (s *Server) handleUptimeCreate(w http.ResponseWriter, r *http.Request) {
                 req.Name, req.Kind, req.Target, req.IntervalS,
         )
         if err != nil {
-                http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "db error", http.StatusInternalServerError)
                 return
         }
         id, _ := res.LastInsertId()
@@ -797,7 +797,7 @@ func (s *Server) handleUptimeIncidentCreate(w http.ResponseWriter, r *http.Reque
 
         id, err := s.createIncident(r.Context(), req.MonitorID, req.Cause, req.Severity, req.Category, req.ErrorCode, "")
         if err != nil {
-                http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "db error", http.StatusInternalServerError)
                 return
         }
 
@@ -1102,6 +1102,30 @@ func (s *Server) pingTarget(kind, target string) pingResult {
         start := time.Now()
         timeout := 10 * time.Second
         pr := pingResult{Status: "down", ErrorCode: "UNKNOWN"}
+
+        // SSRF prevention: block private and loopback IPs
+        host := target
+        if strings.Contains(host, ":") {
+                host = strings.Split(host, ":")[0]
+        }
+        if ip := net.ParseIP(host); ip != nil && isPrivateIP(ip) {
+                pr.ErrorCode = "SSRF_BLOCKED"
+                pr.ErrorDetail = "internal IP addresses are not allowed"
+                return pr
+        }
+        // For hostnames, resolve and check
+        if net.ParseIP(host) == nil && host != "" {
+                addrs, err := net.LookupHost(host)
+                if err == nil {
+                        for _, addr := range addrs {
+                                if resolvedIP := net.ParseIP(addr); resolvedIP != nil && isPrivateIP(resolvedIP) {
+                                        pr.ErrorCode = "SSRF_BLOCKED"
+                                        pr.ErrorDetail = "target resolves to an internal IP address"
+                                        return pr
+                                }
+                        }
+                }
+        }
 
         switch strings.ToLower(kind) {
         case "http", "https":

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 
 interface AuthUser {
   username: string
@@ -19,6 +19,11 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) => set({ user }),
       logout: () => set({ user: null }),
     }),
-    { name: 'orbit-auth' }
+    {
+      name: 'orbit-auth',
+      storage: createJSONStorage(() =>
+        typeof window !== 'undefined' ? window.sessionStorage : localStorage
+      ),
+    }
   )
 )

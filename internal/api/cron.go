@@ -4,12 +4,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// cronCommandRe validates that cron commands contain only safe characters.
+// Disallows: ; & | ` $ ! ( ) { } [ ] < > # ~ newlines
+var cronCommandRe = regexp.MustCompile(`^[A-Za-z0-9_\-./:@%+=, ]+$`)
 
 type cronJob struct {
 	ID          int64   `json:"id"`
@@ -73,6 +79,10 @@ func (s *Server) handleCronCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name, schedule, and command are required", http.StatusBadRequest)
 		return
 	}
+	if !cronCommandRe.MatchString(req.Command) {
+		http.Error(w, fmt.Sprintf("command contains illegal characters (allowed: A-Za-z0-9 _-./:@%%+=,)"), http.StatusBadRequest)
+		return
+	}
 
 	now := time.Now()
 	nextRun := computeNextCronTime(req.Schedule, now)
@@ -111,6 +121,10 @@ func (s *Server) handleCronUpdate(w http.ResponseWriter, r *http.Request) {
 	var req cronJob
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if req.Command != "" && !cronCommandRe.MatchString(req.Command) {
+		http.Error(w, fmt.Sprintf("command contains illegal characters (allowed: A-Za-z0-9 _-./:@%%+=,)"), http.StatusBadRequest)
 		return
 	}
 	enabledInt := 0
