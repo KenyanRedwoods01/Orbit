@@ -9,6 +9,7 @@ import (
         "net/http"
         "os"
         "os/exec"
+        "path/filepath"
         "regexp"
         "strconv"
         "strings"
@@ -94,6 +95,9 @@ type csMetrics struct {
         OriginCapi       int64 `json:"origin_capi"`
         OriginList       int64 `json:"origin_list"`
 }
+
+var csNameRe = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+var csIPRe    = regexp.MustCompile(`^[0-9a-fA-F.:/]+$`)
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -195,10 +199,11 @@ func (s *Server) handleCrowdSecStatus(w http.ResponseWriter, r *http.Request) {
         }
         status.Running = csRunning()
         status.Version = csVersion()
-        apiURL, _ := csGetAPIConfig()
-        status.APIUrl = apiURL
+	apiURL, _ := csGetAPIConfig()
+	status.APIUrl = apiURL
+	status.APIKey = "***"
 
-        // Check if LAPI is responding
+	// Check if LAPI is responding
         if resp, err := csAPIRequest("GET", "/v1/alerts?limit=0", nil); err == nil {
                 resp.Body.Close()
                 status.APIRunning = resp.StatusCode < 500
@@ -286,17 +291,24 @@ func (s *Server) handleCrowdSecDecisions(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleCrowdSecAddDecision(w http.ResponseWriter, r *http.Request) {
-        var req struct {
-                IP       string `json:"ip"`
-                Duration string `json:"duration"`
-                Reason   string `json:"reason"`
-                Type     string `json:"type"`
-                Scope    string `json:"scope"`
-        }
-        if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.IP == "" {
-                http.Error(w, "ip is required", http.StatusBadRequest)
-                return
-        }
+	var req struct {
+		IP       string `json:"ip"`
+		Duration string `json:"duration"`
+		Reason   string `json:"reason"`
+		Type     string `json:"type"`
+		Scope    string `json:"scope"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.IP == "" {
+		http.Error(w, "ip is required", http.StatusBadRequest)
+		return
+	}
+	if !csIPRe.MatchString(req.IP) {
+		http.Error(w, "invalid ip", http.StatusBadRequest)
+		return
+	}
+	if !regexp.MustCompile(`^[0-9]+[smhd]?$`).MatchString(req.Duration) {
+		req.Duration = "4h"
+	}
         if req.Duration == "" { req.Duration = "4h" }
         if req.Type == ""     { req.Type = "ban" }
         if req.Scope == ""    { req.Scope = "Ip" }
@@ -321,7 +333,7 @@ func (s *Server) handleCrowdSecAddDecision(w http.ResponseWriter, r *http.Reques
                 }}
                 resp, apiErr := csAPIRequest("POST", "/v1/decisions", payload)
                 if apiErr != nil {
-                        http.Error(w, "failed: "+string(out), http.StatusInternalServerError)
+                        http.Error(w, "failed", http.StatusInternalServerError)
                         return
                 }
                 defer resp.Body.Close()
@@ -342,7 +354,7 @@ func (s *Server) handleCrowdSecDeleteDecision(w http.ResponseWriter, r *http.Req
                 resp, apiErr := csAPIRequest("DELETE", "/v1/decisions/"+id, nil)
                 if apiErr != nil || resp.StatusCode >= 400 {
                         if resp != nil { resp.Body.Close() }
-                        http.Error(w, "delete failed: "+string(out), http.StatusInternalServerError)
+                        http.Error(w, "delete failed", http.StatusInternalServerError)
                         return
                 }
                 resp.Body.Close()
@@ -367,23 +379,43 @@ func (s *Server) handleCrowdSecDeleteDecisionByIP(w http.ResponseWriter, r *http
 }
 
 func (s *Server) handleCrowdSecBouncers(w http.ResponseWriter, r *http.Request) {
-        out, err := cscliJSON("bouncers", "list")
-        if err != nil {
-                // Try LAPI
-                resp, apiErr := csAPIRequest("GET", "/v1/bouncers", nil)
-                if apiErr != nil {
-                        w.Header().Set("Content-Type", "application/json")
-                        json.NewEncoder(w).Encode([]csBouncer{}) //nolint:errcheck
-                        return
-                }
-                defer resp.Body.Close()
-                body, _ := io.ReadAll(resp.Body)
-                w.Header().Set("Content-Type", "application/json")
-                w.Write(body) //nolint:errcheck
-                return
-        }
-        w.Header().Set("Content-Type", "application/json")
-        w.Write(out) //nolint:errcheck
+	out, err := cscliJSON("bouncers", "list")
+	if err != nil {
+		// Try LAPI
+		resp, apiErr := csAPIRequest("GET", "/v1/bouncers", nil)
+		if apiErr != nil {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode([]csBouncer{}) //nolint:errcheck
+			return
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		// Mask API keys in response
+		var bouncers []csBouncer
+		if json.Unmarshal(body, &bouncers) == nil {
+			for i := range bouncers {
+				bouncers[i].APIKey = "***"
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(bouncers) //nolint:errcheck
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(body) //nolint:errcheck
+		return
+	}
+	// Mask API keys from cscli output
+	var bouncers []csBouncer
+	if json.Unmarshal(out, &bouncers) == nil {
+		for i := range bouncers {
+			bouncers[i].APIKey = "***"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(bouncers) //nolint:errcheck
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(out) //nolint:errcheck
 }
 
 func (s *Server) handleCrowdSecHub(w http.ResponseWriter, r *http.Request) {
@@ -429,14 +461,18 @@ func (s *Server) handleCrowdSecHubUpgrade(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleCrowdSecCollectionInstall(w http.ResponseWriter, r *http.Request) {
-        var req struct {
-                Name string `json:"name"`
-        }
-        if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
-                http.Error(w, "name is required", http.StatusBadRequest)
-                return
-        }
-        out, err := exec.Command("cscli", "collections", "install", req.Name).CombinedOutput()
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+		http.Error(w, "name is required", http.StatusBadRequest)
+		return
+	}
+	if !csNameRe.MatchString(req.Name) {
+		http.Error(w, "invalid name", http.StatusBadRequest)
+		return
+	}
+	out, err := exec.Command("cscli", "collections", "install", req.Name).CombinedOutput()
         ok := err == nil
         if ok {
                 exec.Command("systemctl", "reload", "crowdsec").Run() //nolint:errcheck
@@ -446,8 +482,12 @@ func (s *Server) handleCrowdSecCollectionInstall(w http.ResponseWriter, r *http.
 }
 
 func (s *Server) handleCrowdSecCollectionRemove(w http.ResponseWriter, r *http.Request) {
-        name := r.PathValue("name")
-        out, err := exec.Command("cscli", "collections", "remove", name, "--purge").CombinedOutput()
+	name := r.PathValue("name")
+	if !csNameRe.MatchString(name) {
+		http.Error(w, "invalid name", http.StatusBadRequest)
+		return
+	}
+	out, err := exec.Command("cscli", "collections", "remove", name, "--purge").CombinedOutput()
         ok := err == nil
         w.Header().Set("Content-Type", "application/json")
         json.NewEncoder(w).Encode(map[string]interface{}{"ok": ok, "output": string(out)}) //nolint:errcheck
@@ -624,6 +664,7 @@ func (s *Server) handleCrowdSecInstall(w http.ResponseWriter, r *http.Request) {
         }
 
         installScript := `
+# UNSAFE: downloads and executes remote scripts via bash. Ensure network access is restricted.
 set -e
 # Add CrowdSec repository
 curl -s https://packagecloud.io/install/repositories/crowdsec/crowdsec/script.deb.sh | bash
@@ -654,7 +695,7 @@ func (s *Server) handleCrowdSecConfig(w http.ResponseWriter, r *http.Request) {
         raw, err := os.ReadFile(cfgPath)
         if err != nil {
                 w.Header().Set("Content-Type", "application/json")
-                json.NewEncoder(w).Encode(map[string]string{"raw": "", "path": cfgPath, "error": err.Error()}) //nolint:errcheck
+                json.NewEncoder(w).Encode(map[string]string{"raw": "", "path": cfgPath, "error": "operation failed"}) //nolint:errcheck
                 return
         }
         w.Header().Set("Content-Type", "application/json")
@@ -662,20 +703,25 @@ func (s *Server) handleCrowdSecConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCrowdSecConfigSave(w http.ResponseWriter, r *http.Request) {
-        var req struct {
-                Raw  string `json:"raw"`
-                Path string `json:"path"`
-        }
-        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-                http.Error(w, "bad request", http.StatusBadRequest)
-                return
-        }
-        targetPath := "/etc/crowdsec/config.yaml"
-        if req.Path != "" && strings.HasPrefix(req.Path, "/etc/crowdsec/") {
-                targetPath = req.Path
-        }
+	var req struct {
+		Raw  string `json:"raw"`
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	targetPath := "/etc/crowdsec/config.yaml"
+	if req.Path != "" {
+		cleanPath := filepath.Clean(req.Path)
+		if strings.Contains(req.Path, "..") || !strings.HasPrefix(cleanPath, "/etc/crowdsec/") {
+			http.Error(w, "invalid path", http.StatusBadRequest)
+			return
+		}
+		targetPath = cleanPath
+	}
         if err := os.WriteFile(targetPath, []byte(req.Raw), 0o644); err != nil {
-                http.Error(w, "write failed: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "write failed", http.StatusInternalServerError)
                 return
         }
         out, _ := exec.Command("systemctl", "reload", "crowdsec").CombinedOutput()
@@ -705,7 +751,7 @@ func (s *Server) handleCrowdSecAcquisSave(w http.ResponseWriter, r *http.Request
         }
         acquisPath := "/etc/crowdsec/acquis.yaml"
         if err := os.WriteFile(acquisPath, []byte(req.Raw), 0o644); err != nil {
-                http.Error(w, "write failed: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "write failed", http.StatusInternalServerError)
                 return
         }
         out, _ := exec.Command("systemctl", "reload", "crowdsec").CombinedOutput()
@@ -714,20 +760,24 @@ func (s *Server) handleCrowdSecAcquisSave(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleCrowdSecAllowlistAdd(w http.ResponseWriter, r *http.Request) {
-        var req struct {
-                IP      string `json:"ip"`
-                Comment string `json:"comment"`
-        }
-        if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.IP == "" {
-                http.Error(w, "ip is required", http.StatusBadRequest)
-                return
-        }
-        comment := req.Comment
-        if comment == "" {
-                comment = "manual whitelist via Orbit VPS"
-        }
-        // Try with --comment flag (newer cscli versions)
-        out, err := exec.Command("cscli", "allowlists", "add", "orbit-allowlist", req.IP, "--comment", comment).CombinedOutput()
+	var req struct {
+		IP      string `json:"ip"`
+		Comment string `json:"comment"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.IP == "" {
+		http.Error(w, "ip is required", http.StatusBadRequest)
+		return
+	}
+	if !csIPRe.MatchString(req.IP) {
+		http.Error(w, "invalid ip", http.StatusBadRequest)
+		return
+	}
+	comment := req.Comment
+	if comment == "" {
+		comment = "manual whitelist via Orbit VPS"
+	}
+	// Try with --comment flag (newer cscli versions)
+	out, err := exec.Command("cscli", "allowlists", "add", "orbit-allowlist", req.IP, "--comment", comment).CombinedOutput()
         if err != nil {
                 // Fallback: add decision to delete for this IP
                 out, err = exec.Command("cscli", "decisions", "delete", "--ip", req.IP).CombinedOutput()

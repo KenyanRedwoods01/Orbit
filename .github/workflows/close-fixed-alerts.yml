@@ -1,0 +1,33 @@
+name: Close Fixed Security Alerts
+
+on:
+  pull_request:
+    types: [closed]
+    paths:
+      - "go.mod"
+      - "go.sum"
+      - "web/package.json"
+      - "web/package-lock.json"
+      - "web/pnpm-lock.yaml"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  close-if-fixed:
+    name: Close alert issues for merged dependency updates
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Close fixed alert issues
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        env:
+          BOT_ACTION: close-fixed-alerts
+        with:
+          script: |
+            const bot = require('.github/scripts/community-bot.js');
+            await bot({ github, context, core });

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -77,6 +78,8 @@ type f2bConfig struct {
 	DBPurgeAge    string `json:"db_purge_age"`
 	Raw           string `json:"raw"`
 }
+
+var jailNameRe = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -277,6 +280,10 @@ func (s *Server) handleFail2banBans(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleFail2banBanIP(w http.ResponseWriter, r *http.Request) {
 	jailName := r.PathValue("name")
+	if !jailNameRe.MatchString(jailName) {
+		http.Error(w, "invalid jail name", http.StatusBadRequest)
+		return
+	}
 	var req struct {
 		IP string `json:"ip"`
 	}
@@ -286,7 +293,7 @@ func (s *Server) handleFail2banBanIP(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := exec.Command("fail2ban-client", "set", jailName, "banip", req.IP).CombinedOutput()
 	if err != nil {
-		http.Error(w, "ban failed: "+string(out), http.StatusInternalServerError)
+		http.Error(w, "ban failed", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -295,6 +302,10 @@ func (s *Server) handleFail2banBanIP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleFail2banUnbanIP(w http.ResponseWriter, r *http.Request) {
 	jailName := r.PathValue("name")
+	if !jailNameRe.MatchString(jailName) {
+		http.Error(w, "invalid jail name", http.StatusBadRequest)
+		return
+	}
 	var req struct {
 		IP string `json:"ip"`
 	}
@@ -304,7 +315,7 @@ func (s *Server) handleFail2banUnbanIP(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := exec.Command("fail2ban-client", "set", jailName, "unbanip", req.IP).CombinedOutput()
 	if err != nil {
-		http.Error(w, "unban failed: "+string(out), http.StatusInternalServerError)
+		http.Error(w, "unban failed", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -323,6 +334,9 @@ func (s *Server) handleFail2banUnbanGlobal(w http.ResponseWriter, r *http.Reques
 	jails := []string{req.Jail}
 	if req.Jail == "" {
 		jails = f2bJailList()
+	} else if !jailNameRe.MatchString(req.Jail) {
+		http.Error(w, "invalid jail name", http.StatusBadRequest)
+		return
 	}
 	var results []string
 	for _, jail := range jails {
@@ -461,8 +475,9 @@ func (s *Server) handleFail2banConfigSave(w http.ResponseWriter, r *http.Request
 		return
 	}
 	targetPath := "/etc/fail2ban/jail.local"
+	// WARNING: privileged file write with user-supplied content - ensure input validation
 	if err := os.WriteFile(targetPath, []byte(req.Raw), 0o644); err != nil {
-		http.Error(w, "write failed: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "write failed", http.StatusInternalServerError)
 		return
 	}
 	// Test config
@@ -561,6 +576,11 @@ func (s *Server) handleFail2banJailConfig(w http.ResponseWriter, r *http.Request
 
 func (s *Server) handleFail2banJailConfigSave(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
+	cleanName := filepath.Clean(name)
+	if strings.Contains(name, "..") || strings.Contains(name, "/") || cleanName != name {
+		http.Error(w, "invalid name", http.StatusBadRequest)
+		return
+	}
 	var req struct {
 		Config string `json:"config"`
 	}
@@ -569,10 +589,10 @@ func (s *Server) handleFail2banJailConfigSave(w http.ResponseWriter, r *http.Req
 		return
 	}
 	// Write to /etc/fail2ban/jail.d/<name>.local
-	path := "/etc/fail2ban/jail.d/" + name + ".local"
+	path := "/etc/fail2ban/jail.d/" + cleanName + ".local"
 	os.MkdirAll("/etc/fail2ban/jail.d", 0o755) //nolint:errcheck
 	if err := os.WriteFile(path, []byte(req.Config), 0o644); err != nil {
-		http.Error(w, "write failed: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "write failed", http.StatusInternalServerError)
 		return
 	}
 	out, _ := exec.Command("fail2ban-client", "reload", name).CombinedOutput()
@@ -627,6 +647,10 @@ func (s *Server) handleFail2banWhitelistAdd(w http.ResponseWriter, r *http.Reque
 
 func (s *Server) handleFail2banWhitelistRemove(w http.ResponseWriter, r *http.Request) {
 	ip := r.PathValue("ip")
+	if !regexp.MustCompile(`^[0-9a-fA-F.:/]+$`).MatchString(ip) {
+		http.Error(w, "invalid ip", http.StatusBadRequest)
+		return
+	}
 	out, err := exec.Command("fail2ban-client", "set", "sshd", "delignoreip", ip).CombinedOutput()
 	ok := err == nil
 	w.Header().Set("Content-Type", "application/json")

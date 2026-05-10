@@ -86,7 +86,7 @@ func (s *Server) handleSSHKeyGenerate(w http.ResponseWriter, r *http.Request) {
 		}
 		privateKey, err2 := rsa.GenerateKey(rand.Reader, bits)
 		if err2 != nil {
-			http.Error(w, "key generation failed: "+err2.Error(), http.StatusInternalServerError)
+			http.Error(w, "key generation failed", http.StatusInternalServerError)
 			return
 		}
 		privDER := x509.MarshalPKCS1PrivateKey(privateKey)
@@ -104,7 +104,7 @@ func (s *Server) handleSSHKeyGenerate(w http.ResponseWriter, r *http.Request) {
 	case "ed25519":
 		pubRaw, privRaw, err2 := ed25519.GenerateKey(rand.Reader)
 		if err2 != nil {
-			http.Error(w, "key generation failed: "+err2.Error(), http.StatusInternalServerError)
+			http.Error(w, "key generation failed", http.StatusInternalServerError)
 			return
 		}
 		privBlock := &pem.Block{
@@ -128,16 +128,24 @@ func (s *Server) handleSSHKeyGenerate(w http.ResponseWriter, r *http.Request) {
 
 	_ = err
 
+	// Encrypt private key at rest
+	encPrivKey, err := encrypt(privateKeyPEM, s.cfg.SecretKey)
+	if err != nil {
+		http.Error(w, "encryption failed", http.StatusInternalServerError)
+		return
+	}
+
 	res, err := s.db.SQL.ExecContext(r.Context(),
 		`INSERT INTO ssh_keys (name, type, public_key, private_key_enc, fingerprint, comment) VALUES (?,?,?,?,?,?)`,
-		req.Name, req.Type, publicKeyStr, privateKeyPEM, fingerprint, req.Comment,
+		req.Name, req.Type, publicKeyStr, encPrivKey, fingerprint, req.Comment,
 	)
 	if err != nil {
-		http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
 	id, _ := res.LastInsertId()
 
+	// Return the private key plaintext ONCE at creation time (user must save it)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
@@ -183,21 +191,29 @@ func (s *Server) handleSSHKeyImport(w http.ResponseWriter, r *http.Request) {
 
 	pubKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(req.PublicKey))
 	if err != nil {
-		http.Error(w, "invalid public key: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "invalid public key", http.StatusBadRequest)
 		return
 	}
 	fp := sha256.Sum256(pubKey.Marshal())
 	fingerprint := fmt.Sprintf("SHA256:%x", fp)
 	keyType := pubKey.Type()
 
-	privateKeyPEM := req.PrivateKey
+	// Encrypt private key at rest if provided
+	encPrivKey := ""
+	if req.PrivateKey != "" {
+		encPrivKey, err = encrypt(req.PrivateKey, s.cfg.SecretKey)
+		if err != nil {
+			http.Error(w, "encryption failed", http.StatusInternalServerError)
+			return
+		}
+	}
 
 	res, err := s.db.SQL.ExecContext(r.Context(),
 		`INSERT INTO ssh_keys (name, type, public_key, private_key_enc, fingerprint, comment) VALUES (?,?,?,?,?,?)`,
-		req.Name, keyType, req.PublicKey, privateKeyPEM, fingerprint, req.Comment,
+		req.Name, keyType, req.PublicKey, encPrivKey, fingerprint, req.Comment,
 	)
 	if err != nil {
-		http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
 	id, _ := res.LastInsertId()
@@ -238,16 +254,21 @@ func (s *Server) handleSSHKeyDownload(w http.ResponseWriter, r *http.Request) {
 		which = "public"
 	}
 
-	var name, pubKey, privKey string
+	var name, pubKey, privKeyEnc string
 	err = s.db.SQL.QueryRowContext(r.Context(),
 		`SELECT name, public_key, private_key_enc FROM ssh_keys WHERE id=?`, id,
-	).Scan(&name, &pubKey, &privKey)
+	).Scan(&name, &pubKey, &privKeyEnc)
 	if err != nil {
 		http.Error(w, "key not found", http.StatusNotFound)
 		return
 	}
 
 	if which == "private" {
+		privKey, decErr := decrypt(privKeyEnc, s.cfg.SecretKey)
+		if decErr != nil {
+			http.Error(w, "failed to decrypt private key - key data may be corrupted", http.StatusInternalServerError)
+			return
+		}
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Write([]byte(privKey)) //nolint:errcheck
@@ -313,7 +334,8 @@ func (s *Server) handleSSHSavedCreate(w http.ResponseWriter, r *http.Request) {
 		req.Port = 22
 	}
 	if req.User == "" {
-		req.User = "root"
+		http.Error(w, "ssh_user is required", http.StatusBadRequest)
+		return
 	}
 	if req.AuthType == "" {
 		req.AuthType = "password"
@@ -323,7 +345,7 @@ func (s *Server) handleSSHSavedCreate(w http.ResponseWriter, r *http.Request) {
 		req.Name, req.Host, req.Port, req.User, req.AuthType, req.KeyID, req.JumpHost, req.Tags,
 	)
 	if err != nil {
-		http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
 	req.ID, _ = res.LastInsertId()
@@ -424,7 +446,8 @@ func (s *Server) handleSSHSessionCreate(w http.ResponseWriter, r *http.Request) 
 		req.Port = 22
 	}
 	if req.User == "" {
-		req.User = "root"
+		http.Error(w, "user is required", http.StatusBadRequest)
+		return
 	}
 	res, err := s.db.SQL.ExecContext(r.Context(),
 		`INSERT INTO ssh_sessions (server, user, port, status) VALUES (?,?,?,'active')`,

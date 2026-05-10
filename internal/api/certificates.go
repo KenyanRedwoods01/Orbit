@@ -134,6 +134,10 @@ func (s *Server) handleCertIssue(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "domain is required", http.StatusBadRequest)
                 return
         }
+        if err := validateDomain(req.Domain); err != nil {
+                http.Error(w, err.Error(), http.StatusBadRequest)
+                return
+        }
         if req.Email == "" {
                 http.Error(w, "email is required for Let's Encrypt", http.StatusBadRequest)
                 return
@@ -158,7 +162,7 @@ func (s *Server) handleCertIssue(w http.ResponseWriter, r *http.Request) {
                 json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
                         "ok":     false,
                         "output": out,
-                        "error":  err.Error(),
+                        "error": "operation failed",
                 })
                 return
         }
@@ -194,14 +198,18 @@ func (s *Server) handleCertIssue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCertRenew(w http.ResponseWriter, r *http.Request) {
-        domain := r.PathValue("domain")
-        args := []string{"renew", "--cert-name", domain, "--non-interactive"}
+	domain := r.PathValue("domain")
+	if err := validateDomain(domain); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	args := []string{"renew", "--cert-name", domain, "--non-interactive"}
 
         out, err := runCommandCombined("certbot", args...)
         if err != nil {
                 w.Header().Set("Content-Type", "application/json")
                 json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
-                        "ok": false, "output": out, "error": err.Error(),
+                        "ok": false, "output": out, "error": "operation failed",
                 })
                 return
         }
@@ -221,14 +229,18 @@ func (s *Server) handleCertRenew(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCertRevoke(w http.ResponseWriter, r *http.Request) {
-        domain := r.PathValue("domain")
-        certPath := filepath.Join(letsencryptBase, domain, "fullchain.pem")
+	domain := r.PathValue("domain")
+	if err := validateDomain(domain); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	certPath := filepath.Join(letsencryptBase, domain, "fullchain.pem")
 
         out, err := runCommandCombined("certbot", "revoke", "--cert-path", certPath, "--non-interactive")
         if err != nil {
                 w.Header().Set("Content-Type", "application/json")
                 json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
-                        "ok": false, "output": out, "error": err.Error(),
+                        "ok": false, "output": out, "error": "operation failed",
                 })
                 return
         }
@@ -240,8 +252,12 @@ func (s *Server) handleCertRevoke(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCertStatus(w http.ResponseWriter, r *http.Request) {
-        domain := r.PathValue("domain")
-        certPath := filepath.Join(letsencryptBase, domain, "fullchain.pem")
+	domain := r.PathValue("domain")
+	if err := validateDomain(domain); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	certPath := filepath.Join(letsencryptBase, domain, "fullchain.pem")
 
         data, err := os.ReadFile(certPath)
         if err != nil {
@@ -256,7 +272,7 @@ func (s *Server) handleCertStatus(w http.ResponseWriter, r *http.Request) {
         }
         cert, err := x509.ParseCertificate(block.Bytes)
         if err != nil {
-                http.Error(w, "parse error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "parse error", http.StatusInternalServerError)
                 return
         }
 
@@ -333,7 +349,7 @@ func (s *Server) handleCertAdd(w http.ResponseWriter, r *http.Request) {
                 req.Domain, req.Issuer, req.CertPath, req.KeyPath, expiresAt, autoRenew, status,
         )
         if err != nil {
-                http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "db error", http.StatusInternalServerError)
                 return
         }
         id, _ := res.LastInsertId()
@@ -347,8 +363,12 @@ func (s *Server) handleCertAdd(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCertDelete(w http.ResponseWriter, r *http.Request) {
-        domain := r.PathValue("domain")
-        s.db.SQL.ExecContext(r.Context(), `DELETE FROM certs WHERE domain=?`, domain) //nolint:errcheck
+	domain := r.PathValue("domain")
+	if err := validateDomain(domain); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.db.SQL.ExecContext(r.Context(), `DELETE FROM certs WHERE domain=?`, domain) //nolint:errcheck
         w.WriteHeader(http.StatusNoContent)
 }
 
@@ -430,7 +450,7 @@ func (s *Server) handleCertSelfSigned(w http.ResponseWriter, r *http.Request) {
         )
         if err != nil {
                 w.Header().Set("Content-Type", "application/json")
-                json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "output": out, "error": err.Error()}) //nolint:errcheck
+                json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "output": out, "error": "operation failed"}) //nolint:errcheck
                 return
         }
 

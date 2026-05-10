@@ -2,9 +2,45 @@
 
 const BASE = '/api'
 
+// CSRF token management — the server requires X-CSRF-Token on state-changing
+// requests (POST/PUT/DELETE/PATCH) for session-authenticated users.
+let csrfToken: string | null = null
+let csrfPromise: Promise<void> | null = null
+
+export async function fetchCSRFToken(): Promise<void> {
+  // Deduplicate concurrent calls
+  if (csrfPromise) return csrfPromise
+  csrfPromise = (async () => {
+    try {
+      const res = await fetch(`${BASE}/csrf-token`, { credentials: 'include' })
+      if (res.ok) {
+        const data = await res.json()
+        csrfToken = data.csrf_token
+      }
+    } catch {
+      csrfToken = null
+    }
+  })()
+  await csrfPromise
+  csrfPromise = null
+}
+
+export function clearCSRFToken(): void {
+  csrfToken = null
+  csrfPromise = null
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method || 'GET').toUpperCase()
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+
+  // Attach CSRF token for state-changing methods (skip GET/HEAD/OPTIONS)
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method) && csrfToken) {
+    headers['X-CSRF-Token'] = csrfToken
+  }
+
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     credentials: 'include',
     ...init,
   })
@@ -12,9 +48,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const text = (await res.text()).trim()
     if (res.status === 501) throw new Error('This feature is not yet implemented on the server.')
     if (res.status === 503) throw new Error('Service unavailable — please try again shortly.')
-    if (res.status === 401) throw new Error('Invalid username or password.')
+    if (res.status === 401) throw new Error('Unauthorized — please log in again.')
     if (res.status === 403) throw new Error('Access denied.')
     throw new Error(text || `Request failed (${res.status})`)
+  }
+  const contentType = res.headers.get("content-type") ?? ""
+  if (!contentType.includes("application/json")) {
+    throw new Error("Service temporarily unavailable — the server may still be starting up. Please retry in a moment.")
   }
   return res.json() as Promise<T>
 }
@@ -111,9 +151,9 @@ export interface Service {
 }
 
 export const fetchServices = () => request<Service[]>('/services')
-export const startService = (name: string) => request<void>(`/services/${name}/start`, { method: 'POST' })
-export const stopService = (name: string) => request<void>(`/services/${name}/stop`, { method: 'POST' })
-export const restartService = (name: string) => request<void>(`/services/${name}/restart`, { method: 'POST' })
+export const startService = (name: string) => request<void>(`/services/${encodeURIComponent(name)}/start`, { method: 'POST' })
+export const stopService = (name: string) => request<void>(`/services/${encodeURIComponent(name)}/stop`, { method: 'POST' })
+export const restartService = (name: string) => request<void>(`/services/${encodeURIComponent(name)}/restart`, { method: 'POST' })
 
 // ---- Logs ----
 
@@ -342,7 +382,7 @@ export const toggleFirewallNAT = (id: string) =>
 // Fail2ban
 export const fetchFirewallJails = () => request<FWJailApi[]>('/firewall/f2b/jails')
 export const toggleFirewallJail = (name: string) =>
-  request<{ name: string; status: string }>(`/firewall/f2b/jails/${name}/toggle`, { method: 'POST' })
+  request<{ name: string; status: string }>(`/firewall/f2b/jails/${encodeURIComponent(name)}/toggle`, { method: 'POST' })
 export const fetchFirewallBanned = () => request<FWBannedIPApi[]>('/firewall/f2b/banned')
 export const banFirewallIP = (ip: string, jail: string, country?: string) =>
   request<FWBannedIPApi>('/firewall/f2b/banned', { method: 'POST', body: JSON.stringify({ ip, jail, country }) })
@@ -377,7 +417,7 @@ export interface WebServerSite {
 
 export const fetchWebServerSites = () => request<WebServerSite[]>('/webserver/sites')
 export const updateWebServerSite = (name: string, config: string) =>
-  request<void>(`/webserver/sites/${name}`, { method: 'PUT', body: JSON.stringify({ config }) })
+  request<void>(`/webserver/sites/${encodeURIComponent(name)}`, { method: 'PUT', body: JSON.stringify({ config }) })
 
 // ---- Web Server (extended) ----
 
@@ -988,7 +1028,7 @@ export const toggleFtpUser = (id: number) => request<void>(`/ftp/users/${id}/tog
 export const fetchFtpQuotas = () => request<FtpQuotaApi[]>('/ftp/quotas')
 export const setFtpQuota = (data: { username: string; soft_bytes: number; hard_bytes: number; grace_days?: number }) =>
   request<FtpQuotaApi>('/ftp/quotas', { method: 'POST', body: JSON.stringify(data) })
-export const deleteFtpQuota = (username: string) => request<void>(`/ftp/quotas/${username}`, { method: 'DELETE' })
+export const deleteFtpQuota = (username: string) => request<void>(`/ftp/quotas/${encodeURIComponent(username)}`, { method: 'DELETE' })
 
 export const fetchFtpServiceStatus = () => request<FtpServiceStatus>('/ftp/service/status')
 export const controlFtpService = (action: 'start' | 'stop' | 'restart') =>
@@ -1371,18 +1411,18 @@ export interface ApiPlugin {
 }
 
 export const fetchPlugins    = () => request<ApiPlugin[]>('/plugins')
-export const fetchPlugin     = (id: string) => request<ApiPlugin>(`/plugins/${id}`)
-export const togglePlugin    = (id: number) => request<{ok:boolean}>(`/plugins/${id}/toggle`, { method: 'POST' })
-export const enablePlugin    = (id: string) => request<{ok:boolean}>(`/plugins/${id}/enable`, { method: 'POST' })
-export const disablePlugin   = (id: string) => request<{ok:boolean}>(`/plugins/${id}/disable`, { method: 'POST' })
-export const restartPlugin   = (id: string) => request<{ok:boolean;output:string}>(`/plugins/${id}/restart`, { method: 'POST' })
-export const installPlugin   = (id: string) => request<{status:string}>(`/plugins/${id}/install`, { method: 'POST' })
-export const uninstallPlugin = (id: string) => request<{ok:boolean;output:string}>(`/plugins/${id}`, { method: 'DELETE' })
-export const fetchPluginLogs = (id: string, lines = 100) => request<{time:string;level:string;message:string;unit:string}[]>(`/plugins/${id}/logs?lines=${lines}`)
+export const fetchPlugin     = (id: string) => request<ApiPlugin>(`/plugins/${encodeURIComponent(id)}`)
+export const togglePlugin    = (id: number) => request<{ok:boolean}>(`/plugins/${encodeURIComponent(String(id))}/toggle`, { method: 'POST' })
+export const enablePlugin    = (id: string) => request<{ok:boolean}>(`/plugins/${encodeURIComponent(id)}/enable`, { method: 'POST' })
+export const disablePlugin   = (id: string) => request<{ok:boolean}>(`/plugins/${encodeURIComponent(id)}/disable`, { method: 'POST' })
+export const restartPlugin   = (id: string) => request<{ok:boolean;output:string}>(`/plugins/${encodeURIComponent(id)}/restart`, { method: 'POST' })
+export const installPlugin   = (id: string) => request<{status:string}>(`/plugins/${encodeURIComponent(id)}/install`, { method: 'POST' })
+export const uninstallPlugin = (id: string) => request<{ok:boolean;output:string}>(`/plugins/${encodeURIComponent(id)}`, { method: 'DELETE' })
+export const fetchPluginLogs = (id: string, lines = 100) => request<{time:string;level:string;message:string;unit:string}[]>(`/plugins/${encodeURIComponent(id)}/logs?lines=${lines}`)
 export const updatePluginConfig = (id: string, config: Record<string, unknown>) =>
-  request<void>(`/plugins/${id}/config`, { method: 'PUT', body: JSON.stringify(config) })
+  request<void>(`/plugins/${encodeURIComponent(id)}/config`, { method: 'PUT', body: JSON.stringify(config) })
 export const updatePluginPortConfig = (id: string, portConfig: Record<string, unknown>) =>
-  request<{ok:boolean}>(`/plugins/${id}/port-config`, { method: 'PUT', body: JSON.stringify(portConfig) })
+  request<{ok:boolean}>(`/plugins/${encodeURIComponent(id)}/port-config`, { method: 'PUT', body: JSON.stringify(portConfig) })
 
 // ── Apps (Marketplace) ────────────────────────────────────────────────────────
 export interface AppResponse {
@@ -1447,17 +1487,17 @@ export interface AppLogEntry {
 }
 
 export const fetchApps           = () => request<AppResponse[]>('/apps')
-export const fetchApp            = (id: string) => request<AppResponse>(`/apps/${id}`)
-export const fetchAppStatus      = (id: string) => request<AppStatusResponse>(`/apps/${id}/status`)
-export const fetchAppLogs        = (id: string, lines = 200) => request<AppLogEntry[]>(`/apps/${id}/logs?lines=${lines}`)
-export const fetchAppPreflight   = (id: string) => request<AppPreflightResult>(`/apps/${id}/preflight`)
+export const fetchApp            = (id: string) => request<AppResponse>(`/apps/${encodeURIComponent(id)}`)
+export const fetchAppStatus      = (id: string) => request<AppStatusResponse>(`/apps/${encodeURIComponent(id)}/status`)
+export const fetchAppLogs        = (id: string, lines = 200) => request<AppLogEntry[]>(`/apps/${encodeURIComponent(id)}/logs?lines=${lines}`)
+export const fetchAppPreflight   = (id: string) => request<AppPreflightResult>(`/apps/${encodeURIComponent(id)}/preflight`)
 export const installApp          = (id: string, opts: { port: number }) =>
-  request<{ status: string; message: string }>(`/apps/${id}/install`, { method: 'POST', body: JSON.stringify(opts) })
-export const uninstallApp        = (id: string) => request<{ ok: boolean; output: string }>(`/apps/${id}`, { method: 'DELETE' })
+  request<{ status: string; message: string }>(`/apps/${encodeURIComponent(id)}/install`, { method: 'POST', body: JSON.stringify(opts) })
+export const uninstallApp        = (id: string) => request<{ ok: boolean; output: string }>(`/apps/${encodeURIComponent(id)}`, { method: 'DELETE' })
 export const controlApp          = (id: string, action: 'start' | 'stop' | 'restart') =>
-  request<{ ok: boolean; action: string; output: string }>(`/apps/${id}/${action}`, { method: 'POST' })
+  request<{ ok: boolean; action: string; output: string }>(`/apps/${encodeURIComponent(id)}/${action}`, { method: 'POST' })
 export const updateAppConfig     = (id: string, config: Record<string, unknown>) =>
-  request<void>(`/apps/${id}/config`, { method: 'PUT', body: JSON.stringify(config) })
+  request<void>(`/apps/${encodeURIComponent(id)}/config`, { method: 'PUT', body: JSON.stringify(config) })
 
 // ---- Certificates ----
 export interface CertEntryAPI {
@@ -2385,3 +2425,89 @@ export function fetchDBTableIndexes(connId: number, db: string, table: string) {
     `/database/connections/${connId}/databases/${encodeURIComponent(db)}/tables/${encodeURIComponent(table)}/indexes`,
   )
 }
+
+// ---- Profile (self-service) ----
+
+export interface ProfileRecord {
+  id: number
+  username: string
+  email: string
+  display_name: string
+  bio: string
+  avatar_color: string
+  role: string
+  created_at: number
+  totp_enabled: boolean
+  backup_codes_left: number
+}
+
+export interface ProfileSession {
+  id: number
+  scope: string
+  created_at: number
+  expires_at: number
+  current: boolean
+}
+
+export interface ProfileActivity {
+  id: number
+  ts: number
+  action: string
+  details: string
+  ip: string
+}
+
+export const fetchProfile = async (): Promise<ProfileRecord> => {
+  try {
+    return await request<ProfileRecord>('/profile')
+  } catch {
+    const me = await request<{ id: number; username: string; email: string; role: string; created_at: number }>('/users/me')
+    return {
+      id: me.id,
+      username: me.username,
+      email: me.email,
+      display_name: '',
+      bio: '',
+      avatar_color: '#3b82f6',
+      role: me.role,
+      created_at: me.created_at,
+      totp_enabled: false,
+      backup_codes_left: 0,
+    }
+  }
+}
+
+export const updateProfile = (d: { email?: string; display_name?: string; bio?: string; avatar_color?: string }) =>
+  request<void>('/profile', { method: 'PUT', body: JSON.stringify(d) })
+
+export const changeProfileUsername = (username: string, current_password: string) =>
+  request<void>('/profile/username', { method: 'POST', body: JSON.stringify({ username, current_password }) })
+
+export const changeProfilePassword = (current_password: string, new_password: string) =>
+  request<void>('/profile/password', { method: 'POST', body: JSON.stringify({ current_password, new_password }) })
+
+export const fetchProfileSessions = () => request<ProfileSession[]>('/profile/sessions')
+
+export const revokeProfileSession = (id: number) =>
+  request<void>(`/profile/sessions/${id}`, { method: 'DELETE' })
+
+export const fetchProfileActivity = () => request<ProfileActivity[]>('/profile/activity')
+
+// ---- TOTP (re-exported with cleaner names for profile page) ----
+
+export interface TOTPStatus {
+  enabled: boolean
+  pending_activation: boolean
+  backup_codes_left: number
+}
+
+export interface TOTPSetupData {
+  secret: string
+  qr_url: string
+}
+
+export const fetchTOTPStatus   = () => request<TOTPStatus>('/auth/totp/status')
+export const setupTOTP         = () => request<TOTPSetupData>('/auth/totp/setup', { method: 'POST' })
+export const verifyTOTP        = (code: string) => request<{ ok: boolean; backup_codes: string[] }>('/auth/totp/verify', { method: 'POST', body: JSON.stringify({ code }) })
+export const disableTOTP       = (password: string) => request<{ ok: boolean }>('/auth/totp/disable', { method: 'POST', body: JSON.stringify({ password }) })
+export const regenerateBackupCodes = () => request<{ backup_codes: string[] }>('/auth/totp/backup-codes', { method: 'POST' })

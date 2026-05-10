@@ -17,6 +17,28 @@ import (
         "time"
 )
 
+// sanitizeFilename replaces unsafe characters for use in Content-Disposition
+// and limits the result to 255 bytes.
+func sanitizeFilename(name string) string {
+	out := make([]byte, 0, len(name))
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '-' || r == '_' ||
+			r == '.' || r == ' ' {
+			out = append(out, byte(r))
+		} else {
+			out = append(out, '_')
+		}
+		if len(out) >= 255 {
+			break
+		}
+	}
+	if len(out) > 255 {
+		out = out[:255]
+	}
+	return string(out)
+}
+
 // ── File System API ───────────────────────────────────────────────────────────
 
 type fileEntry struct {
@@ -34,10 +56,60 @@ type fileEntry struct {
         MimeType  string `json:"mime_type,omitempty"`
 }
 
-func safeRoot(rawPath string) (string, error) {
-        clean := filepath.Clean("/" + strings.TrimPrefix(rawPath, "/"))
-        return clean, nil
+// safeRoot cleans a path, blocks kernel virtual filesystems, and restricts
+// access to paths outside the configured data directory (except read-only
+// access to standard system paths used by the panel).
+func (s *Server) safeRoot(rawPath string) (string, error) {
+	clean := filepath.Clean("/" + strings.TrimPrefix(rawPath, "/"))
+	// Block kernel virtual filesystems regardless of auth level.
+	if isKernelVirtualPath(clean) {
+		return "", fmt.Errorf("access to %q is not permitted", clean)
+	}
+	// Resolve symlinks to prevent symlink-based path traversal
+	resolved, err := filepath.EvalSymlinks(clean)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve symlinks for %q: %w", clean, err)
+	}
+	// After resolution, re-check against kernel virtual paths
+	if isKernelVirtualPath(resolved) {
+		return "", fmt.Errorf("access to %q is not permitted (resolved from %q)", resolved, clean)
+	}
+	// Sandbox: restrict to data directory and allowed system paths
+	if s != nil && s.cfg != nil && s.cfg.DataDir != "" {
+		dataDirAbs, err1 := filepath.Abs(s.cfg.DataDir)
+		if err1 != nil {
+			return "", fmt.Errorf("failed to resolve data directory: %w", err1)
+		}
+		resolvedAbs, err2 := filepath.Abs(resolved)
+		if err2 != nil {
+			return "", fmt.Errorf("failed to resolve path %q: %w", resolved, err2)
+		}
+		if !strings.HasPrefix(resolvedAbs, dataDirAbs+string(os.PathSeparator)) &&
+			resolvedAbs != dataDirAbs &&
+			!isAllowedSystemPath(resolvedAbs) {
+			return "", fmt.Errorf("access to %q is outside permitted directory", resolved)
+		}
+	}
+	return resolved, nil
 }
+
+// isAllowedSystemPath returns true for paths the panel needs read access to.
+func isAllowedSystemPath(path string) bool {
+	allowed := []string{
+		"/etc/", "/var/log/",
+		"/usr/share/", "/usr/lib/", "/opt/",
+		"/home/", "/root/", "/tmp/", "/run/",
+	}
+	clean := filepath.Clean(path)
+	for _, p := range allowed {
+		if strings.HasPrefix(clean, filepath.Clean(p)) {
+			return true
+		}
+	}
+	return false
+}
+
+
 
 func mimeFromExt(name string) string {
         ext := strings.ToLower(filepath.Ext(name))
@@ -82,6 +154,13 @@ func mimeFromExt(name string) string {
         return "application/octet-stream"
 }
 
+func validateFileMode(mode os.FileMode) error {
+	if mode&os.ModeSetuid != 0 || mode&os.ModeSetgid != 0 || mode&os.ModeSticky != 0 {
+		return fmt.Errorf("file mode %04o contains setuid, setgid, or sticky bits which are not allowed", mode)
+	}
+	return nil
+}
+
 func statToEntry(info fs.FileInfo, path string) fileEntry {
         entry := fileEntry{
                 Name:      info.Name(),
@@ -99,11 +178,11 @@ func statToEntry(info fs.FileInfo, path string) fileEntry {
 }
 
 func (s *Server) handleFSList(w http.ResponseWriter, r *http.Request) {
-        rawPath := r.URL.Query().Get("path")
-        if rawPath == "" {
-                rawPath = "/"
-        }
-        path, err := safeRoot(rawPath)
+	rawPath := r.URL.Query().Get("path")
+	if rawPath == "" {
+		rawPath = "/"
+	}
+	path, err := s.safeRoot(rawPath)
         if err != nil {
                 http.Error(w, "invalid path", http.StatusBadRequest)
                 return
@@ -111,7 +190,7 @@ func (s *Server) handleFSList(w http.ResponseWriter, r *http.Request) {
 
         entries, err := os.ReadDir(path)
         if err != nil {
-                http.Error(w, "cannot read directory: "+err.Error(), http.StatusNotFound)
+                http.Error(w, "cannot read directory", http.StatusNotFound)
                 return
         }
 
@@ -153,25 +232,32 @@ func (s *Server) handleFSStat(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "path is required", http.StatusBadRequest)
                 return
         }
-        path, _ := safeRoot(rawPath)
-        info, err := os.Lstat(path)
-        if err != nil {
-                http.Error(w, "not found", http.StatusNotFound)
-                return
-        }
-        fe := statToEntry(info, path)
-        w.Header().Set("Content-Type", "application/json")
-        json.NewEncoder(w).Encode(fe) //nolint:errcheck
+path, err := s.safeRoot(rawPath)
+	if err != nil {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	fe := statToEntry(info, path)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(fe) //nolint:errcheck
 }
 
 func (s *Server) handleFSRead(w http.ResponseWriter, r *http.Request) {
-        rawPath := r.URL.Query().Get("path")
-        if rawPath == "" {
-                http.Error(w, "path is required", http.StatusBadRequest)
+	rawPath := r.URL.Query().Get("path")
+	if rawPath == "" {
+		http.Error(w, "path is required", http.StatusBadRequest)
+		return
+	}
+	path, err := s.safeRoot(rawPath)
+        if err != nil {
+                http.Error(w, "invalid path", http.StatusBadRequest)
                 return
         }
-        path, _ := safeRoot(rawPath)
-
         info, err := os.Stat(path)
         if err != nil {
                 http.Error(w, "not found", http.StatusNotFound)
@@ -188,7 +274,7 @@ func (s *Server) handleFSRead(w http.ResponseWriter, r *http.Request) {
 
         data, err := os.ReadFile(path)
         if err != nil {
-                http.Error(w, "read error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "failed to read file", http.StatusInternalServerError)
                 return
         }
         w.Header().Set("Content-Type", "application/json")
@@ -214,21 +300,28 @@ func (s *Server) handleFSWrite(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "path is required", http.StatusBadRequest)
                 return
         }
-        path, _ := safeRoot(req.Path)
-
+	path, err := s.safeRoot(req.Path)
+        if err != nil {
+                http.Error(w, "invalid path", http.StatusBadRequest)
+                return
+        }
         mode := fs.FileMode(0o644)
         if req.Mode != "" {
                 if v, err := strconv.ParseUint(req.Mode, 8, 32); err == nil {
                         mode = fs.FileMode(v)
                 }
         }
+        if err := validateFileMode(mode); err != nil {
+                http.Error(w, err.Error(), http.StatusBadRequest)
+                return
+        }
 
         if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-                http.Error(w, "mkdir error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "failed to create directory", http.StatusInternalServerError)
                 return
         }
         if err := os.WriteFile(path, []byte(req.Content), mode); err != nil {
-                http.Error(w, "write error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "failed to write file", http.StatusInternalServerError)
                 return
         }
 
@@ -240,7 +333,7 @@ func (s *Server) handleFSWrite(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleFSUpload(w http.ResponseWriter, r *http.Request) {
         if err := r.ParseMultipartForm(100 << 20); err != nil {
-                http.Error(w, "parse form error: "+err.Error(), http.StatusBadRequest)
+                http.Error(w, "failed to parse request", http.StatusBadRequest)
                 return
         }
 
@@ -248,7 +341,12 @@ func (s *Server) handleFSUpload(w http.ResponseWriter, r *http.Request) {
         if dir == "" {
                 dir = "/"
         }
-        dir, _ = safeRoot(dir)
+        var err error
+        dir, err = s.safeRoot(dir)
+        if err != nil {
+                http.Error(w, "path: "+err.Error(), http.StatusBadRequest)
+                return
+        }
 
         file, header, err := r.FormFile("file")
         if err != nil {
@@ -260,14 +358,14 @@ func (s *Server) handleFSUpload(w http.ResponseWriter, r *http.Request) {
         dest := filepath.Join(dir, filepath.Base(header.Filename))
         out, err := os.Create(dest)
         if err != nil {
-                http.Error(w, "create error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "failed to create file", http.StatusInternalServerError)
                 return
         }
         defer out.Close()
 
         n, err := io.Copy(out, file)
         if err != nil {
-                http.Error(w, "write error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "failed to write file", http.StatusInternalServerError)
                 return
         }
 
@@ -284,7 +382,11 @@ func (s *Server) handleFSDownload(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "path is required", http.StatusBadRequest)
                 return
         }
-        path, _ := safeRoot(rawPath)
+        path, err := s.safeRoot(rawPath)
+        if err != nil {
+                http.Error(w, "invalid path", http.StatusBadRequest)
+                return
+        }
 
         info, err := os.Stat(path)
         if err != nil {
@@ -296,7 +398,7 @@ func (s *Server) handleFSDownload(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
-        w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, info.Name()))
+        w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, sanitizeFilename(info.Name())))
         w.Header().Set("Content-Type", mimeFromExt(info.Name()))
         w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
         http.ServeFile(w, r, path)
@@ -315,15 +417,23 @@ func (s *Server) handleFSMkdir(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "path is required", http.StatusBadRequest)
                 return
         }
-        path, _ := safeRoot(req.Path)
+        path, err := s.safeRoot(req.Path)
+        if err != nil {
+                http.Error(w, "invalid path", http.StatusBadRequest)
+                return
+        }
         mode := fs.FileMode(0o755)
         if req.Mode != "" {
                 if v, err := strconv.ParseUint(req.Mode, 8, 32); err == nil {
                         mode = fs.FileMode(v)
                 }
         }
+        if err := validateFileMode(mode); err != nil {
+                http.Error(w, err.Error(), http.StatusBadRequest)
+                return
+        }
         if err := os.MkdirAll(path, mode); err != nil {
-                http.Error(w, "mkdir error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "failed to create directory", http.StatusInternalServerError)
                 return
         }
         w.Header().Set("Content-Type", "application/json")
@@ -344,16 +454,19 @@ func (s *Server) handleFSDelete(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "path is required", http.StatusBadRequest)
                 return
         }
-        path, _ := safeRoot(req.Path)
+        path, err := s.safeRoot(req.Path)
+        if err != nil {
+                http.Error(w, "invalid path", http.StatusBadRequest)
+                return
+        }
 
-        var err error
         if req.Recursive {
                 err = os.RemoveAll(path)
         } else {
                 err = os.Remove(path)
         }
         if err != nil {
-                http.Error(w, "delete error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "failed to delete path", http.StatusInternalServerError)
                 return
         }
         w.WriteHeader(http.StatusNoContent)
@@ -372,11 +485,19 @@ func (s *Server) handleFSRename(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "old_path and new_path are required", http.StatusBadRequest)
                 return
         }
-        oldPath, _ := safeRoot(req.OldPath)
-        newPath, _ := safeRoot(req.NewPath)
+        oldPath, err := s.safeRoot(req.OldPath)
+        if err != nil {
+                http.Error(w, "invalid old path", http.StatusBadRequest)
+                return
+        }
+        newPath, err := s.safeRoot(req.NewPath)
+        if err != nil {
+                http.Error(w, "invalid new path", http.StatusBadRequest)
+                return
+        }
 
         if err := os.Rename(oldPath, newPath); err != nil {
-                http.Error(w, "rename error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "failed to rename path", http.StatusInternalServerError)
                 return
         }
         w.Header().Set("Content-Type", "application/json")
@@ -396,14 +517,22 @@ func (s *Server) handleFSChmod(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "path and mode are required", http.StatusBadRequest)
                 return
         }
-        path, _ := safeRoot(req.Path)
+        path, err := s.safeRoot(req.Path)
+        if err != nil {
+                http.Error(w, "invalid path", http.StatusBadRequest)
+                return
+        }
         modeVal, err := strconv.ParseUint(req.Mode, 8, 32)
         if err != nil {
                 http.Error(w, "invalid mode (use octal like 0755)", http.StatusBadRequest)
                 return
         }
+        if err := validateFileMode(fs.FileMode(modeVal)); err != nil {
+                http.Error(w, err.Error(), http.StatusBadRequest)
+                return
+        }
         if err := os.Chmod(path, fs.FileMode(modeVal)); err != nil {
-                http.Error(w, "chmod error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "failed to change permissions", http.StatusInternalServerError)
                 return
         }
         w.Header().Set("Content-Type", "application/json")
@@ -424,9 +553,13 @@ func (s *Server) handleFSChown(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "path is required", http.StatusBadRequest)
                 return
         }
-        path, _ := safeRoot(req.Path)
+        path, err := s.safeRoot(req.Path)
+        if err != nil {
+                http.Error(w, "invalid path", http.StatusBadRequest)
+                return
+        }
         if err := os.Lchown(path, req.UID, req.GID); err != nil {
-                http.Error(w, "chown error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "failed to change ownership", http.StatusInternalServerError)
                 return
         }
         w.Header().Set("Content-Type", "application/json")
@@ -443,7 +576,11 @@ func (s *Server) handleFSSearch(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "q is required", http.StatusBadRequest)
                 return
         }
-        rootPath, _ := safeRoot(rawPath)
+        rootPath, err := s.safeRoot(rawPath)
+        if err != nil {
+                http.Error(w, "invalid path", http.StatusBadRequest)
+                return
+        }
         q = strings.ToLower(q)
 
         var results []fileEntry
@@ -495,18 +632,26 @@ func (s *Server) handleFSCompress(w http.ResponseWriter, r *http.Request) {
                 req.Format = "tar.gz"
         }
 
-        outPath, _ := safeRoot(req.Output)
+        outPath, err := s.safeRoot(req.Output)
+        if err != nil {
+                http.Error(w, "invalid output path", http.StatusBadRequest)
+                return
+        }
 
         switch req.Format {
         case "zip":
                 outFile, err := os.Create(outPath)
                 if err != nil {
-                        http.Error(w, "create error: "+err.Error(), http.StatusInternalServerError)
+                        http.Error(w, "failed to create file", http.StatusInternalServerError)
                         return
                 }
                 zw := zip.NewWriter(outFile)
                 for _, srcRaw := range req.Paths {
-                        src, _ := safeRoot(srcRaw)
+                        src, err := s.safeRoot(srcRaw)
+                        if err != nil {
+                                http.Error(w, "invalid source path: "+srcRaw, http.StatusBadRequest)
+                                return
+                        }
                         filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error { //nolint:errcheck
                                 if err != nil || d.IsDir() {
                                         return nil
@@ -531,13 +676,17 @@ func (s *Server) handleFSCompress(w http.ResponseWriter, r *http.Request) {
         default: // tar.gz
                 outFile, err := os.Create(outPath)
                 if err != nil {
-                        http.Error(w, "create error: "+err.Error(), http.StatusInternalServerError)
+                        http.Error(w, "failed to create file", http.StatusInternalServerError)
                         return
                 }
                 gw := gzip.NewWriter(outFile)
                 tw := tar.NewWriter(gw)
                 for _, srcRaw := range req.Paths {
-                        src, _ := safeRoot(srcRaw)
+                        src, err := s.safeRoot(srcRaw)
+                        if err != nil {
+                                http.Error(w, "invalid source path: "+srcRaw, http.StatusBadRequest)
+                                return
+                        }
                         filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error { //nolint:errcheck
                                 if err != nil {
                                         return nil
@@ -595,11 +744,19 @@ func (s *Server) handleFSExtract(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "path is required", http.StatusBadRequest)
                 return
         }
-        srcPath, _ := safeRoot(req.Path)
+        srcPath, err := s.safeRoot(req.Path)
+        if err != nil {
+                http.Error(w, "source path: "+err.Error(), http.StatusBadRequest)
+                return
+        }
         if req.Output == "" {
                 req.Output = filepath.Dir(srcPath)
         }
-        outPath, _ := safeRoot(req.Output)
+        outPath, err := s.safeRoot(req.Output)
+        if err != nil {
+                http.Error(w, "output path: "+err.Error(), http.StatusBadRequest)
+                return
+        }
 
         if err := os.MkdirAll(outPath, 0o755); err != nil {
                 http.Error(w, "mkdir error", http.StatusInternalServerError)
@@ -613,11 +770,15 @@ func (s *Server) handleFSExtract(w http.ResponseWriter, r *http.Request) {
         case strings.HasSuffix(ext, ".zip"):
                 r2, err := zip.OpenReader(srcPath)
                 if err != nil {
-                        http.Error(w, "zip open error: "+err.Error(), http.StatusInternalServerError)
+                        http.Error(w, "failed to open archive", http.StatusInternalServerError)
                         return
                 }
                 defer r2.Close()
                 for _, f := range r2.File {
+                        // Block symlinks in ZIP to prevent symlink-attack file reads
+                        if f.FileInfo().Mode()&os.ModeSymlink != 0 {
+                                continue
+                        }
                         dest := filepath.Join(outPath, f.Name)
                         // Zip-slip protection: dest must stay within outPath
                         if !strings.HasPrefix(filepath.Clean(dest)+string(os.PathSeparator), filepath.Clean(outPath)+string(os.PathSeparator)) {
@@ -644,7 +805,7 @@ func (s *Server) handleFSExtract(w http.ResponseWriter, r *http.Request) {
         default: // tar.gz / tar
                 f, err := os.Open(srcPath)
                 if err != nil {
-                        http.Error(w, "open error: "+err.Error(), http.StatusInternalServerError)
+                        http.Error(w, "failed to open file", http.StatusInternalServerError)
                         return
                 }
                 defer f.Close()
@@ -669,6 +830,11 @@ func (s *Server) handleFSExtract(w http.ResponseWriter, r *http.Request) {
                         }
                         if err2 != nil {
                                 extractErr = err2
+                                break
+                        }
+                        // Block symlinks and hardlinks to prevent symlink-attack file reads
+                        if hdr.Typeflag == tar.TypeSymlink || hdr.Typeflag == tar.TypeLink {
+                                extractErr = fmt.Errorf("archive contains symlink/link: %s", hdr.Name)
                                 break
                         }
                         dest := filepath.Join(outPath, hdr.Name)
@@ -707,10 +873,14 @@ func (s *Server) handleFSHex(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "path required", http.StatusBadRequest)
                 return
         }
-        cleanPath, _ := safeRoot(path)
+        cleanPath, err := s.safeRoot(path)
+        if err != nil {
+                http.Error(w, "invalid path", http.StatusBadRequest)
+                return
+        }
         f, err := os.Open(cleanPath)
         if err != nil {
-                http.Error(w, "open error: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "failed to open file", http.StatusInternalServerError)
                 return
         }
         defer f.Close()
@@ -787,7 +957,11 @@ func (s *Server) handleFSArchiveList(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "path required", http.StatusBadRequest)
                 return
         }
-        cleanPath, _ := safeRoot(path)
+        cleanPath, err := s.safeRoot(path)
+        if err != nil {
+                http.Error(w, "invalid path", http.StatusBadRequest)
+                return
+        }
 
         type ArchiveEntry struct {
                 Name      string `json:"name"`
@@ -804,7 +978,7 @@ func (s *Server) handleFSArchiveList(w http.ResponseWriter, r *http.Request) {
         case strings.HasSuffix(ext, ".zip"):
                 r2, err := zip.OpenReader(cleanPath)
                 if err != nil {
-                        http.Error(w, "zip error: "+err.Error(), http.StatusInternalServerError)
+                        http.Error(w, "failed to create archive", http.StatusInternalServerError)
                         return
                 }
                 defer r2.Close()
@@ -824,7 +998,7 @@ func (s *Server) handleFSArchiveList(w http.ResponseWriter, r *http.Request) {
         default:
                 tf, err := os.Open(cleanPath)
                 if err != nil {
-                        http.Error(w, "open error: "+err.Error(), http.StatusInternalServerError)
+                        http.Error(w, "failed to open file", http.StatusInternalServerError)
                         return
                 }
                 defer tf.Close()

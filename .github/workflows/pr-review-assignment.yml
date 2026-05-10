@@ -1,0 +1,166 @@
+name: PR Review Assignment
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  assign-reviewers:
+    name: Auto-assign reviewers by changed paths
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Assign reviewers
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const author = pr.user.login;
+
+            // ── Reviewer routing rules ─────────────────────────────────────
+            // Map changed-file patterns to GitHub usernames.
+            // Add your maintainer handles here.
+            const ROUTING_RULES = [
+              {
+                // Security-critical: auth, middleware, validators, CSRF, JWT
+                patterns: [
+                  /^internal\/api\/(auth|middleware|security|totp|users)\.go$/,
+                  /^internal\/auth\//,
+                ],
+                reviewers:  ['KenyanRedwoods01'],
+                label:      'security',
+                reason:     'Security-sensitive code change',
+              },
+              {
+                // Backend API
+                patterns: [/^internal\/api\//, /^internal\/db\//, /^internal\/config\//],
+                reviewers:  ['KenyanRedwoods01'],
+                label:      'backend',
+                reason:     'Backend API change',
+              },
+              {
+                // Frontend
+                patterns: [/^web\/src\//],
+                reviewers:  ['KenyanRedwoods01'],
+                label:      'frontend',
+                reason:     'Frontend change',
+              },
+              {
+                // CI/CD and workflows
+                patterns: [/^\.github\//],
+                reviewers:  ['KenyanRedwoods01'],
+                label:      'ci/cd',
+                reason:     'CI/CD or GitHub Actions change',
+              },
+              {
+                // Dockerfile / docker-compose
+                patterns: [/^Dockerfile$/, /^docker-compose\.yml$/],
+                reviewers:  ['KenyanRedwoods01'],
+                label:      'docker',
+                reason:     'Docker configuration change',
+              },
+              {
+                // Dependency files
+                patterns: [/^go\.(mod|sum)$/, /^web\/package(-lock)?\.json$/],
+                reviewers:  ['KenyanRedwoods01'],
+                label:      'dependencies',
+                reason:     'Dependency update',
+              },
+            ];
+
+            // ── Fetch changed files ────────────────────────────────────────
+            const filesRes = await github.rest.pulls.listFiles({
+              owner:       context.repo.owner,
+              repo:        context.repo.repo,
+              pull_number: pr.number,
+              per_page:    100,
+            });
+            const changedFiles = filesRes.data.map(f => f.filename);
+            console.log(`Changed files (${changedFiles.length}):`, changedFiles.slice(0, 10));
+
+            // ── Match rules to changed files ───────────────────────────────
+            const reviewerSet = new Set();
+            const labelSet    = new Set();
+            const reasons     = [];
+
+            for (const rule of ROUTING_RULES) {
+              const matched = changedFiles.some(file =>
+                rule.patterns.some(pat => pat.test(file))
+              );
+              if (matched) {
+                rule.reviewers.forEach(r => r !== author && reviewerSet.add(r));
+                labelSet.add(rule.label);
+                reasons.push(`**${rule.label}**: ${rule.reason}`);
+              }
+            }
+
+            const reviewers = [...reviewerSet];
+            const labels    = [...labelSet];
+            console.log('Routing to reviewers:', reviewers);
+            console.log('Applying labels:', labels);
+            console.log('Reasons:', reasons);
+
+            // ── Request reviewers ──────────────────────────────────────────
+            if (reviewers.length > 0) {
+              try {
+                await github.rest.pulls.requestReviewers({
+                  owner:       context.repo.owner,
+                  repo:        context.repo.repo,
+                  pull_number: pr.number,
+                  reviewers,
+                });
+                console.log(`✅ Requested reviews from: ${reviewers.join(', ')}`);
+              } catch (err) {
+                console.log(`⚠️  Could not request reviewers: ${err.message}`);
+              }
+            }
+
+            // ── Apply path-based labels ────────────────────────────────────
+            if (labels.length > 0) {
+              // Get existing repo labels to avoid 404 on missing labels
+              const allLabels = await github.rest.issues.listLabelsForRepo({
+                owner:    context.repo.owner,
+                repo:     context.repo.repo,
+                per_page: 100,
+              });
+              const existingNames = new Set(allLabels.data.map(l => l.name));
+              const safeLabels = labels.filter(l => existingNames.has(l));
+
+              if (safeLabels.length > 0) {
+                await github.rest.issues.addLabels({
+                  owner:        context.repo.owner,
+                  repo:         context.repo.repo,
+                  issue_number: pr.number,
+                  labels:       safeLabels,
+                });
+                console.log(`✅ Applied labels: ${safeLabels.join(', ')}`);
+              }
+            }
+
+            // ── Comment with routing summary ───────────────────────────────
+            if (reasons.length > 0 && reviewers.length > 0) {
+              const body = [
+                `### 🤖 Review Assignment`,
+                ``,
+                `This PR has been automatically routed based on changed files:`,
+                ``,
+                ...reasons.map(r => `- ${r}`),
+                ``,
+                `**Reviewers requested:** ${reviewers.map(r => `@${r}`).join(', ')}`,
+                ``,
+                `_Routing managed by [Orbit Community Bot](/.github/assets/community-bot-logo.svg)_`,
+              ].join('\n');
+
+              await github.rest.issues.createComment({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: pr.number,
+                body,
+              });
+            }

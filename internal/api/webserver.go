@@ -14,6 +14,49 @@ import (
         "time"
 )
 
+// ── Security helpers (path validation) ───────────────────────────────────────
+
+const (
+	nginxSitesAvailable = "/etc/nginx/sites-available/"
+	nginxSitesEnabled   = "/etc/nginx/sites-enabled/"
+	nginxLogDir         = "/var/log/nginx/"
+)
+
+// validateNginxSiteName ensures the site name component cannot escape the
+// nginx configuration directories via path traversal (#27).
+func validateNginxSiteName(name string) (string, error) {
+	if name == "" {
+		return "", fmt.Errorf("site name must not be empty")
+	}
+	// filepath.Base removes any directory component; reject if it changes.
+	safe := filepath.Base(name)
+	if safe != name {
+		return "", fmt.Errorf("site name %q contains illegal path components", name)
+	}
+	if strings.Contains(safe, "..") || strings.ContainsAny(safe, "/\\") {
+		return "", fmt.Errorf("site name %q contains illegal characters", name)
+	}
+	// Confirm the assembled paths stay inside the expected dirs.
+	for _, base := range []string{nginxSitesAvailable, nginxSitesEnabled} {
+		resolved := filepath.Clean(base + safe)
+		if !strings.HasPrefix(resolved, base) {
+			return "", fmt.Errorf("site name %q would escape %s", name, base)
+		}
+	}
+	return safe, nil
+}
+
+// validateNginxLogPath validates a candidate access-log path so it stays
+// within the nginx log directory, preventing path traversal (#26, #28).
+func validateNginxLogPath(candidatePath string) (string, error) {
+	clean := filepath.Clean(candidatePath)
+	if !strings.HasPrefix(clean, nginxLogDir) {
+		return "", fmt.Errorf("log path %q is outside the nginx log directory", clean)
+	}
+	return clean, nil
+}
+
+
 // ── Regexps for nginx config parsing ────────────────────────────────────────
 
 var (
@@ -487,7 +530,7 @@ func (s *Server) handleWebServerGlobalPut(w http.ResponseWriter, r *http.Request
         // Write to a temp file first, then test
         tmpPath := "/tmp/nginx.conf.test"
         if err := os.WriteFile(tmpPath, []byte(req.Raw), 0o644); err != nil {
-                http.Error(w, "failed to write temp config: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "failed to write temp config", http.StatusInternalServerError)
                 return
         }
 
@@ -495,13 +538,13 @@ func (s *Server) handleWebServerGlobalPut(w http.ResponseWriter, r *http.Request
         if err != nil {
                 w.Header().Set("Content-Type", "application/json")
                 json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
-                        "ok": false, "output": string(out), "error": err.Error(),
+                        "ok": false, "error": "operation failed",
                 })
                 return
         }
 
         if err := os.WriteFile("/etc/nginx/nginx.conf", []byte(req.Raw), 0o644); err != nil {
-                http.Error(w, "failed to write config: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "failed to write config", http.StatusInternalServerError)
                 return
         }
 
@@ -571,9 +614,9 @@ func (s *Server) handleWebServerRestart(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleWebServerUpdateSite(w http.ResponseWriter, r *http.Request) {
-        name := r.PathValue("name")
-        if strings.Contains(name, "..") || strings.Contains(name, "/") {
-                http.Error(w, "invalid name", http.StatusBadRequest)
+        name, nerr := validateNginxSiteName(r.PathValue("name"))
+        if nerr != nil {
+                http.Error(w, "invalid site name", http.StatusBadRequest)
                 return
         }
 
@@ -585,91 +628,146 @@ func (s *Server) handleWebServerUpdateSite(w http.ResponseWriter, r *http.Reques
                 return
         }
 
-        path := filepath.Join("/etc/nginx/sites-available", name)
-        if err := os.WriteFile(path, []byte(req.Config), 0o644); err != nil {
-                http.Error(w, "failed to write site config: "+err.Error(), http.StatusInternalServerError)
-                return
-        }
-        w.WriteHeader(http.StatusNoContent)
+	// Test nginx configuration before writing
+	tmpPath := "/tmp/nginx-site-test.conf"
+	if err := os.WriteFile(tmpPath, []byte(req.Config), 0o644); err != nil {
+		http.Error(w, "failed to write test config", http.StatusInternalServerError)
+		return
+	}
+	testOut, testErr := exec.Command("nginx", "-t", "-c", tmpPath).CombinedOutput()
+	if testErr != nil {
+		http.Error(w, "nginx config test failed: "+string(testOut), http.StatusBadRequest)
+		return
+	}
+
+	path := filepath.Join(nginxSitesAvailable, name)
+	if err := os.WriteFile(path, []byte(req.Config), 0o644); err != nil {
+		http.Error(w, "failed to write site config", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleWebServerCreateSite(w http.ResponseWriter, r *http.Request) {
-        var req struct {
-                Name        string `json:"name"`
-                Domain      string `json:"domain"`
-                Aliases     string `json:"aliases"`
-                DocRoot     string `json:"doc_root"`
-                PHP         bool   `json:"php"`
-                PHPVersion  string `json:"php_version"`
-                SSL         string `json:"ssl"`
-                HSTS        bool   `json:"hsts"`
-                HTTPRedirect bool  `json:"http_redirect"`
-                Gzip        bool   `json:"gzip"`
-                Proxy       string `json:"proxy"`
-                RateLimit   bool   `json:"rate_limit"`
-                RateLimitRate string `json:"rate_limit_rate"`
-                SecHeaders  bool   `json:"sec_headers"`
-                Config      string `json:"config"`
-        }
-        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-                http.Error(w, "bad request", http.StatusBadRequest)
-                return
-        }
-        if req.Domain == "" {
-                http.Error(w, "domain is required", http.StatusBadRequest)
-                return
-        }
+	var req struct {
+		Name        string `json:"name"`
+		Domain      string `json:"domain"`
+		Aliases     string `json:"aliases"`
+		DocRoot     string `json:"doc_root"`
+		PHP         bool   `json:"php"`
+		PHPVersion  string `json:"php_version"`
+		SSL         string `json:"ssl"`
+		HSTS        bool   `json:"hsts"`
+		HTTPRedirect bool  `json:"http_redirect"`
+		Gzip        bool   `json:"gzip"`
+		Proxy       string `json:"proxy"`
+		RateLimit   bool   `json:"rate_limit"`
+		RateLimitRate string `json:"rate_limit_rate"`
+		SecHeaders  bool   `json:"sec_headers"`
+		Config      string `json:"config"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if req.Domain == "" {
+		http.Error(w, "domain is required", http.StatusBadRequest)
+		return
+	}
+	// Validate domain
+	if err := validateDomain(req.Domain); err != nil {
+		http.Error(w, "invalid domain: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 
-        name := req.Name
-        if name == "" {
-                name = req.Domain
-        }
-        if strings.Contains(name, "..") || strings.Contains(name, "/") {
-                http.Error(w, "invalid name", http.StatusBadRequest)
-                return
-        }
+	name := req.Name
+	if name == "" {
+		name = req.Domain
+	}
+	validatedName, nerr := validateNginxSiteName(name)
+	if nerr != nil {
+		http.Error(w, "invalid site name", http.StatusBadRequest)
+		return
+	}
+	name = validatedName
 
-        configContent := req.Config
-        if configContent == "" {
-                configContent = generateNginxConfig(req.Domain, req.Aliases, req.DocRoot, req.PHP,
-                        req.PHPVersion, req.SSL, req.HSTS, req.HTTPRedirect, req.Gzip, req.Proxy,
-                        req.RateLimit, req.RateLimitRate, req.SecHeaders)
-        }
+	// Validate docRoot path
+	if req.DocRoot != "" {
+		if !filepath.IsAbs(req.DocRoot) {
+			http.Error(w, "doc_root must be an absolute path", http.StatusBadRequest)
+			return
+		}
+		if strings.Contains(req.DocRoot, "..") {
+			http.Error(w, "doc_root contains path traversal", http.StatusBadRequest)
+			return
+		}
+	}
 
-        availPath := filepath.Join("/etc/nginx/sites-available", name)
-        if _, err := os.Stat(availPath); err == nil {
-                http.Error(w, "site already exists", http.StatusConflict)
-                return
-        }
+	// Validate proxy URL
+	if req.Proxy != "" {
+		if !strings.HasPrefix(req.Proxy, "http://") && !strings.HasPrefix(req.Proxy, "https://") {
+			http.Error(w, "proxy must be a valid http:// or https:// URL", http.StatusBadRequest)
+			return
+		}
+		if strings.ContainsAny(req.Proxy, " \t\n\r") {
+			http.Error(w, "proxy URL contains whitespace", http.StatusBadRequest)
+			return
+		}
+	}
 
-        if req.DocRoot != "" {
-                os.MkdirAll(req.DocRoot, 0o755) //nolint:errcheck
-        }
+	// Validate aliases domains
+	if req.Aliases != "" {
+		for _, alias := range strings.Fields(strings.ReplaceAll(req.Aliases, ",", " ")) {
+			if alias != "" {
+				if err := validateDomain(alias); err != nil {
+					http.Error(w, "invalid alias domain: "+err.Error(), http.StatusBadRequest)
+					return
+				}
+			}
+		}
+	}
 
-        if err := os.WriteFile(availPath, []byte(configContent), 0o644); err != nil {
-                http.Error(w, "failed to create site config: "+err.Error(), http.StatusInternalServerError)
-                return
-        }
+	configContent := req.Config
+	if configContent == "" {
+		configContent = generateNginxConfig(req.Domain, req.Aliases, req.DocRoot, req.PHP,
+			req.PHPVersion, req.SSL, req.HSTS, req.HTTPRedirect, req.Gzip, req.Proxy,
+			req.RateLimit, req.RateLimitRate, req.SecHeaders)
+	}
 
-        w.Header().Set("Content-Type", "application/json")
-        w.WriteHeader(http.StatusCreated)
-        site := parseNginxSite(name, availPath, false)
-        json.NewEncoder(w).Encode(site) //nolint:errcheck
+	availPath := filepath.Join(nginxSitesAvailable, name)
+	if _, err := os.Stat(availPath); err == nil {
+		http.Error(w, "site already exists", http.StatusConflict)
+		return
+	}
+
+	if req.DocRoot != "" {
+		os.MkdirAll(req.DocRoot, 0o755) //nolint:errcheck
+	}
+
+	if err := os.WriteFile(availPath, []byte(configContent), 0o644); err != nil {
+		http.Error(w, "failed to create site config", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	site := parseNginxSite(name, availPath, false)
+	json.NewEncoder(w).Encode(site) //nolint:errcheck
 }
 
 func (s *Server) handleWebServerDeleteSite(w http.ResponseWriter, r *http.Request) {
-        name := r.PathValue("name")
-        if strings.Contains(name, "..") || strings.Contains(name, "/") {
-                http.Error(w, "invalid name", http.StatusBadRequest)
+        name, nerr := validateNginxSiteName(r.PathValue("name"))
+        if nerr != nil {
+                http.Error(w, "invalid site name", http.StatusBadRequest)
                 return
         }
 
-        availPath := filepath.Join("/etc/nginx/sites-available", name)
-        enabledPath := filepath.Join("/etc/nginx/sites-enabled", name)
+        availPath := filepath.Join(nginxSitesAvailable, name)
+        enabledPath := filepath.Join(nginxSitesEnabled, name)
 
         os.Remove(enabledPath) //nolint:errcheck
         if err := os.Remove(availPath); err != nil && !os.IsNotExist(err) {
-                http.Error(w, "failed to delete site: "+err.Error(), http.StatusInternalServerError)
+                http.Error(w, "failed to delete site", http.StatusInternalServerError)
                 return
         }
 
@@ -678,14 +776,14 @@ func (s *Server) handleWebServerDeleteSite(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) handleWebServerToggleSite(w http.ResponseWriter, r *http.Request) {
-        name := r.PathValue("name")
-        if strings.Contains(name, "..") || strings.Contains(name, "/") {
-                http.Error(w, "invalid name", http.StatusBadRequest)
+        name, nerr := validateNginxSiteName(r.PathValue("name"))
+        if nerr != nil {
+                http.Error(w, "invalid site name", http.StatusBadRequest)
                 return
         }
 
-        availPath := filepath.Join("/etc/nginx/sites-available", name)
-        enabledPath := filepath.Join("/etc/nginx/sites-enabled", name)
+        availPath := filepath.Join(nginxSitesAvailable, name)
+        enabledPath := filepath.Join(nginxSitesEnabled, name)
 
         if _, err := os.Lstat(enabledPath); err == nil {
                 // Currently enabled → disable
@@ -700,7 +798,7 @@ func (s *Server) handleWebServerToggleSite(w http.ResponseWriter, r *http.Reques
                         // Fallback: copy instead of symlink
                         data, _ := os.ReadFile(availPath)
                         if err := os.WriteFile(enabledPath, data, 0o644); err != nil {
-                                http.Error(w, "failed to enable site: "+err.Error(), http.StatusInternalServerError)
+                                http.Error(w, "failed to enable site", http.StatusInternalServerError)
                                 return
                         }
                 }
@@ -728,11 +826,14 @@ func (s *Server) handleWebServerLogs(w http.ResponseWriter, r *http.Request) {
                 site = ""
         }
 
-        logPath := "/var/log/nginx/access.log"
+        logPath := nginxLogDir + "access.log"
         if site != "" {
-                candidatePath := "/var/log/nginx/" + site + "-access.log"
-                if _, err := os.Stat(candidatePath); err == nil {
-                        logPath = candidatePath
+                // Validate log path stays within nginx log dir (#26, #28).
+                candidatePath := nginxLogDir + site + "-access.log"
+                if validated, verr := validateNginxLogPath(candidatePath); verr == nil {
+                        if _, serr := os.Stat(validated); serr == nil {
+                                logPath = validated
+                        }
                 }
         }
 
@@ -746,90 +847,96 @@ func (s *Server) handleWebServerLogs(w http.ResponseWriter, r *http.Request) {
 
 // generateNginxConfig produces a basic nginx server block from parameters.
 func generateNginxConfig(domain, aliases, docRoot string, php bool, phpVersion, ssl string, hsts, httpRedirect, gzip bool, proxy string, rateLimit bool, rateLimitRate string, secHeaders bool) string {
-        if docRoot == "" {
-                docRoot = "/var/www/" + domain + "/html"
-        }
+	if docRoot == "" {
+		docRoot = "/var/www/" + safeDomain + "/html"
+	}
+	// Sanitize docRoot
+	docRoot = strings.ReplaceAll(docRoot, "..", "")
 
-        serverNames := domain
-        if aliases != "" {
-                serverNames += " " + strings.ReplaceAll(aliases, ",", " ")
-        }
+	// Sanitize domain for use in file paths
+	safeDomain := strings.ReplaceAll(domain, "/", "_")
+	safeDomain = strings.ReplaceAll(safeDomain, "..", "")
 
-        var b strings.Builder
+	serverNames := domain
+	if aliases != "" {
+		serverNames += " " + strings.ReplaceAll(aliases, ",", " ")
+	}
 
-        if httpRedirect && ssl != "none" {
-                fmt.Fprintf(&b, "server {\n    listen 80;\n    server_name %s;\n    return 301 https://$host$request_uri;\n}\n\n", serverNames)
-        }
+	var b strings.Builder
 
-        listenLine := "80"
-        if ssl != "none" {
-                listenLine = "443 ssl http2"
-        }
+	if httpRedirect && ssl != "none" {
+		fmt.Fprintf(&b, "server {\n    listen 80;\n    server_name %s;\n    return 301 https://$host$request_uri;\n}\n\n", serverNames)
+	}
 
-        fmt.Fprintf(&b, "server {\n")
-        fmt.Fprintf(&b, "    listen %s;\n", listenLine)
-        if !httpRedirect || ssl == "none" {
-                fmt.Fprintf(&b, "    listen 80;\n")
-        }
-        fmt.Fprintf(&b, "    server_name %s;\n", serverNames)
-        fmt.Fprintf(&b, "    root %s;\n", docRoot)
-        fmt.Fprintf(&b, "    index index.html index.htm index.php;\n")
+	listenLine := "80"
+	if ssl != "none" {
+		listenLine = "443 ssl http2"
+	}
 
-        if ssl == "letsencrypt" {
-                fmt.Fprintf(&b, "\n    ssl_certificate /etc/letsencrypt/live/%s/fullchain.pem;\n", domain)
-                fmt.Fprintf(&b, "    ssl_certificate_key /etc/letsencrypt/live/%s/privkey.pem;\n", domain)
-                fmt.Fprintf(&b, "    ssl_protocols TLSv1.2 TLSv1.3;\n")
-                fmt.Fprintf(&b, "    ssl_ciphers HIGH:!aNULL:!MD5;\n")
-        }
+	fmt.Fprintf(&b, "server {\n")
+	fmt.Fprintf(&b, "    listen %s;\n", listenLine)
+	if !httpRedirect || ssl == "none" {
+		fmt.Fprintf(&b, "    listen 80;\n")
+	}
+	fmt.Fprintf(&b, "    server_name %s;\n", serverNames)
+	fmt.Fprintf(&b, "    root %s;\n", docRoot)
+	fmt.Fprintf(&b, "    index index.html index.htm index.php;\n")
 
-        if hsts && ssl != "none" {
-                fmt.Fprintf(&b, "\n    add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;\n")
-        }
+	if ssl == "letsencrypt" {
+		fmt.Fprintf(&b, "\n    ssl_certificate /etc/letsencrypt/live/%s/fullchain.pem;\n", safeDomain)
+		fmt.Fprintf(&b, "    ssl_certificate_key /etc/letsencrypt/live/%s/privkey.pem;\n", safeDomain)
+		fmt.Fprintf(&b, "    ssl_protocols TLSv1.2 TLSv1.3;\n")
+		fmt.Fprintf(&b, "    ssl_ciphers HIGH:!aNULL:!MD5;\n")
+	}
 
-        if secHeaders {
-                fmt.Fprintf(&b, "    add_header X-Frame-Options SAMEORIGIN always;\n")
-                fmt.Fprintf(&b, "    add_header X-Content-Type-Options nosniff always;\n")
-                fmt.Fprintf(&b, "    add_header X-XSS-Protection \"1; mode=block\" always;\n")
-                fmt.Fprintf(&b, "    add_header Referrer-Policy strict-origin-when-cross-origin always;\n")
-        }
+	if hsts && ssl != "none" {
+		fmt.Fprintf(&b, "\n    add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;\n")
+	}
 
-        if gzip {
-                fmt.Fprintf(&b, "\n    gzip on;\n")
-                fmt.Fprintf(&b, "    gzip_types text/plain text/css application/javascript application/json image/svg+xml;\n")
-        }
+	if secHeaders {
+		fmt.Fprintf(&b, "    add_header X-Frame-Options SAMEORIGIN always;\n")
+		fmt.Fprintf(&b, "    add_header X-Content-Type-Options nosniff always;\n")
+		fmt.Fprintf(&b, "    add_header X-XSS-Protection \"1; mode=block\" always;\n")
+		fmt.Fprintf(&b, "    add_header Referrer-Policy strict-origin-when-cross-origin always;\n")
+	}
 
-        if rateLimit && rateLimitRate != "" {
-                fmt.Fprintf(&b, "\n    limit_req_zone $binary_remote_addr zone=%s:10m rate=%s;\n", domain, rateLimitRate)
-                fmt.Fprintf(&b, "    limit_req zone=%s burst=20 nodelay;\n", domain)
-        }
+	if gzip {
+		fmt.Fprintf(&b, "\n    gzip on;\n")
+		fmt.Fprintf(&b, "    gzip_types text/plain text/css application/javascript application/json image/svg+xml;\n")
+	}
 
-        fmt.Fprintf(&b, "\n    access_log /var/log/nginx/%s-access.log;\n", domain)
-        fmt.Fprintf(&b, "    error_log /var/log/nginx/%s-error.log;\n", domain)
+	if rateLimit && rateLimitRate != "" {
+		fmt.Fprintf(&b, "\n    limit_req_zone $binary_remote_addr zone=%s:10m rate=%s;\n", safeDomain, rateLimitRate)
+		fmt.Fprintf(&b, "    limit_req zone=%s burst=20 nodelay;\n", safeDomain)
+	}
 
-        if proxy != "" {
-                fmt.Fprintf(&b, "\n    location / {\n")
-                fmt.Fprintf(&b, "        proxy_pass %s;\n", proxy)
-                fmt.Fprintf(&b, "        proxy_set_header Host $host;\n")
-                fmt.Fprintf(&b, "        proxy_set_header X-Real-IP $remote_addr;\n")
-                fmt.Fprintf(&b, "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
-                fmt.Fprintf(&b, "        proxy_set_header X-Forwarded-Proto $scheme;\n")
-                fmt.Fprintf(&b, "    }\n")
-        } else if phpVersion != "" && phpVersion != "none" {
-                fmt.Fprintf(&b, "\n    location / {\n")
-                fmt.Fprintf(&b, "        try_files $uri $uri/ /index.php?$args;\n")
-                fmt.Fprintf(&b, "    }\n")
-                fmt.Fprintf(&b, "\n    location ~ \\.php$ {\n")
-                fmt.Fprintf(&b, "        fastcgi_pass unix:/run/php/php%s-fpm.sock;\n", phpVersion)
-                fmt.Fprintf(&b, "        fastcgi_index index.php;\n")
-                fmt.Fprintf(&b, "        include fastcgi_params;\n")
-                fmt.Fprintf(&b, "        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;\n")
-                fmt.Fprintf(&b, "    }\n")
-        } else {
-                fmt.Fprintf(&b, "\n    location / {\n")
-                fmt.Fprintf(&b, "        try_files $uri $uri/ =404;\n")
-                fmt.Fprintf(&b, "    }\n")
-        }
+	fmt.Fprintf(&b, "\n    access_log /var/log/nginx/%s-access.log;\n", safeDomain)
+	fmt.Fprintf(&b, "    error_log /var/log/nginx/%s-error.log;\n", safeDomain)
 
-        fmt.Fprintf(&b, "}\n")
-        return b.String()
+	if proxy != "" {
+		fmt.Fprintf(&b, "\n    location / {\n")
+		fmt.Fprintf(&b, "        proxy_pass %s;\n", proxy)
+		fmt.Fprintf(&b, "        proxy_set_header Host $host;\n")
+		fmt.Fprintf(&b, "        proxy_set_header X-Real-IP $remote_addr;\n")
+		fmt.Fprintf(&b, "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
+		fmt.Fprintf(&b, "        proxy_set_header X-Forwarded-Proto $scheme;\n")
+		fmt.Fprintf(&b, "    }\n")
+	} else if phpVersion != "" && phpVersion != "none" {
+		fmt.Fprintf(&b, "\n    location / {\n")
+		fmt.Fprintf(&b, "        try_files $uri $uri/ /index.php?$args;\n")
+		fmt.Fprintf(&b, "    }\n")
+		fmt.Fprintf(&b, "\n    location ~ \\.php$ {\n")
+		fmt.Fprintf(&b, "        fastcgi_pass unix:/run/php/php%s-fpm.sock;\n", phpVersion)
+		fmt.Fprintf(&b, "        fastcgi_index index.php;\n")
+		fmt.Fprintf(&b, "        include fastcgi_params;\n")
+		fmt.Fprintf(&b, "        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;\n")
+		fmt.Fprintf(&b, "    }\n")
+	} else {
+		fmt.Fprintf(&b, "\n    location / {\n")
+		fmt.Fprintf(&b, "        try_files $uri $uri/ =404;\n")
+		fmt.Fprintf(&b, "    }\n")
+	}
+
+	fmt.Fprintf(&b, "}\n")
+	return b.String()
 }
