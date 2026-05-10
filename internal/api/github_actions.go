@@ -10,10 +10,15 @@ import (
         "io"
         "net/http"
         "os/exec"
+        "regexp"
         "strings"
         "sync"
         "time"
 )
+
+// allowedGitCmdPattern restricts workflow commands to safe characters.
+// Disallows: ; & | ` $ ! ( ) { } [ ] < > # ~ \ \n and pipes/redirections.
+var allowedGitCmdPattern = regexp.MustCompile(`^[A-Za-z0-9_\-./:@%+=, ]+$`)
 
 func newUUID() string {
         b := make([]byte, 16)
@@ -139,7 +144,7 @@ func (s *Server) handleGitWorkflowList(w http.ResponseWriter, r *http.Request) {
                        (SELECT COUNT(*) FROM git_runs WHERE workflow_id=w.id)
                 FROM git_workflows w ORDER BY w.created_at DESC`)
         if err != nil {
-                http.Error(w, err.Error(), 500)
+                http.Error(w, "internal server error", 500)
                 return
         }
         defer rows.Close()
@@ -167,7 +172,7 @@ func (s *Server) handleGitWorkflowList(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGitWorkflowCreate(w http.ResponseWriter, r *http.Request) {
         var wf GitWorkflow
         if err := json.NewDecoder(r.Body).Decode(&wf); err != nil {
-                http.Error(w, err.Error(), 400)
+                http.Error(w, "internal server error", 400)
                 return
         }
         if wf.ID == "" {
@@ -214,7 +219,7 @@ func (s *Server) handleGitWorkflowCreate(w http.ResponseWriter, r *http.Request)
                 wf.EnvVars, wf.TimeoutSecs, wf.RetryCount, notifyS, notifyF, enabled, wf.WebhookSecret,
                 time.Now().Unix())
         if err != nil {
-                http.Error(w, err.Error(), 500)
+                http.Error(w, "internal server error", 500)
                 return
         }
         writeJSON(w, wf)
@@ -224,7 +229,7 @@ func (s *Server) handleGitWorkflowUpdate(w http.ResponseWriter, r *http.Request)
         id := r.PathValue("id")
         var wf GitWorkflow
         if err := json.NewDecoder(r.Body).Decode(&wf); err != nil {
-                http.Error(w, err.Error(), 400)
+                http.Error(w, "internal server error", 400)
                 return
         }
         notifyS, notifyF, enabled := 1, 1, 1
@@ -276,7 +281,7 @@ func (s *Server) handleGitRunList(w http.ResponseWriter, r *http.Request) {
 
         rows, err := s.db.SQL.Query(query, args...)
         if err != nil {
-                http.Error(w, err.Error(), 500)
+                http.Error(w, "internal server error", 500)
                 return
         }
         defer rows.Close()
@@ -325,7 +330,7 @@ func (s *Server) handleGitRunLogs(w http.ResponseWriter, r *http.Request) {
         id := r.PathValue("id")
         rows, err := s.db.SQL.Query(`SELECT ts, level, message FROM git_run_logs WHERE run_id=? ORDER BY ts, id`, id)
         if err != nil {
-                http.Error(w, err.Error(), 500)
+                http.Error(w, "internal server error", 500)
                 return
         }
         defer rows.Close()
@@ -384,41 +389,69 @@ func (s *Server) handleGitWebhook(w http.ResponseWriter, r *http.Request) {
         json.Unmarshal(body, &payload)
 
         var repoURL, branch, commitSHA, commitMsg, author string
-        switch provider {
-        case "github":
-                sig := r.Header.Get("X-Hub-Signature-256")
-                repoURL, _ = jsonPath(payload, "repository.clone_url")
-                ref, _ := jsonPath(payload, "ref")
-                branch = strings.TrimPrefix(ref, "refs/heads/")
-                commitSHA, _ = jsonPath(payload, "after")
-                commitMsg, _ = jsonPath(payload, "head_commit.message")
-                author, _ = jsonPath(payload, "head_commit.author.name")
+	switch provider {
+	case "github":
+		sig := r.Header.Get("X-Hub-Signature-256")
+		repoURL, _ = jsonPath(payload, "repository.clone_url")
+		ref, _ := jsonPath(payload, "ref")
+		branch = strings.TrimPrefix(ref, "refs/heads/")
+		commitSHA, _ = jsonPath(payload, "after")
+		commitMsg, _ = jsonPath(payload, "head_commit.message")
+		author, _ = jsonPath(payload, "head_commit.author.name")
 
-                if sig != "" && repoURL != "" {
-                        var secret string
-                        s.db.SQL.QueryRow(`SELECT COALESCE(value,'') FROM git_settings WHERE key='github_webhook_secret'`).Scan(&secret)
-                        if secret != "" && !verifyHMACSHA256(body, secret, strings.TrimPrefix(sig, "sha256=")) {
-                                http.Error(w, "invalid signature", 401)
-                                return
-                        }
-                }
-        case "gitlab":
-                repoURL, _ = jsonPath(payload, "project.git_http_url")
-                ref, _ := jsonPath(payload, "ref")
-                branch = strings.TrimPrefix(ref, "refs/heads/")
-                commitSHA, _ = jsonPath(payload, "checkout_sha")
-                author, _ = jsonPath(payload, "user_username")
-        case "gitea":
-                repoURL, _ = jsonPath(payload, "repository.clone_url")
-                ref, _ := jsonPath(payload, "ref")
-                branch = strings.TrimPrefix(ref, "refs/heads/")
-                commitSHA, _ = jsonPath(payload, "after")
-        case "bitbucket":
-                repoURL, _ = jsonPath(payload, "repository.links.clone.0.href")
-                branch, _ = jsonPath(payload, "push.changes.0.new.name")
-                commitSHA, _ = jsonPath(payload, "push.changes.0.new.target.hash")
-                author, _ = jsonPath(payload, "actor.display_name")
-        }
+		var ghSecret string
+		s.db.SQL.QueryRow(`SELECT value FROM git_settings WHERE key='github_webhook_secret'`).Scan(&ghSecret)
+		if ghSecret != "" {
+			if sig == "" || !verifyHMACSHA256(body, ghSecret, strings.TrimPrefix(sig, "sha256=")) {
+				http.Error(w, "invalid signature", 401)
+				return
+			}
+		}
+	case "gitlab":
+		gitlabToken := r.Header.Get("X-Gitlab-Token")
+		repoURL, _ = jsonPath(payload, "project.git_http_url")
+		ref, _ := jsonPath(payload, "ref")
+		branch = strings.TrimPrefix(ref, "refs/heads/")
+		commitSHA, _ = jsonPath(payload, "checkout_sha")
+		author, _ = jsonPath(payload, "user_username")
+
+		var glSecret string
+		s.db.SQL.QueryRow(`SELECT value FROM git_settings WHERE key='gitlab_webhook_secret'`).Scan(&glSecret)
+		if glSecret != "" && glSecret != gitlabToken {
+			http.Error(w, "invalid token", 401)
+			return
+		}
+	case "gitea":
+		giteaSig := r.Header.Get("X-Gitea-Signature")
+		repoURL, _ = jsonPath(payload, "repository.clone_url")
+		ref, _ := jsonPath(payload, "ref")
+		branch = strings.TrimPrefix(ref, "refs/heads/")
+		commitSHA, _ = jsonPath(payload, "after")
+
+		var gaSecret string
+		s.db.SQL.QueryRow(`SELECT value FROM git_settings WHERE key='gitea_webhook_secret'`).Scan(&gaSecret)
+		if gaSecret != "" {
+			if giteaSig == "" || !verifyHMACSHA256(body, gaSecret, giteaSig) {
+				http.Error(w, "invalid signature", 401)
+				return
+			}
+		}
+	case "bitbucket":
+		bbSig := r.Header.Get("X-Hub-Signature")
+		repoURL, _ = jsonPath(payload, "repository.links.clone.0.href")
+		branch, _ = jsonPath(payload, "push.changes.0.new.name")
+		commitSHA, _ = jsonPath(payload, "push.changes.0.new.target.hash")
+		author, _ = jsonPath(payload, "actor.display_name")
+
+		var bbSecret string
+		s.db.SQL.QueryRow(`SELECT value FROM git_settings WHERE key='bitbucket_webhook_secret'`).Scan(&bbSecret)
+		if bbSecret != "" {
+			if bbSig == "" || !verifyHMACSHA256(body, bbSecret, strings.TrimPrefix(bbSig, "sha256=")) {
+				http.Error(w, "invalid signature", 401)
+				return
+			}
+		}
+	}
 
         rows, _ := s.db.SQL.Query(`SELECT id FROM git_workflows WHERE enabled=1 AND repo_url=? AND branch=? AND trigger_type='push'`,
                 repoURL, branch)
@@ -440,29 +473,32 @@ func (s *Server) handleGitWebhook(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGitSettingsGet(w http.ResponseWriter, r *http.Request) {
-        get := func(k string) string {
-                var v string
-                s.db.SQL.QueryRow(`SELECT value FROM git_settings WHERE key=?`, k).Scan(&v)
-                return v
-        }
-        maxC := 3
-        timeout := 600
-        s.db.SQL.QueryRow(`SELECT CAST(value AS INTEGER) FROM git_settings WHERE key='max_concurrent'`).Scan(&maxC)
-        s.db.SQL.QueryRow(`SELECT CAST(value AS INTEGER) FROM git_settings WHERE key='default_timeout'`).Scan(&timeout)
-        writeJSON(w, GitSettings{
-                GitHubToken:    get("github_token"),
-                GitLabToken:    get("gitlab_token"),
-                GiteaToken:     get("gitea_token"),
-                WorkDir:        get("work_dir"),
-                MaxConcurrent:  maxC,
-                DefaultTimeout: timeout,
-        })
+	get := func(k string) string {
+		var v string
+		s.db.SQL.QueryRow(`SELECT value FROM git_settings WHERE key=?`, k).Scan(&v)
+		if v != "" {
+			return "***"
+		}
+		return v
+	}
+	maxC := 3
+	timeout := 600
+	s.db.SQL.QueryRow(`SELECT CAST(value AS INTEGER) FROM git_settings WHERE key='max_concurrent'`).Scan(&maxC)
+	s.db.SQL.QueryRow(`SELECT CAST(value AS INTEGER) FROM git_settings WHERE key='default_timeout'`).Scan(&timeout)
+	writeJSON(w, GitSettings{
+		GitHubToken:    get("github_token"),
+		GitLabToken:    get("gitlab_token"),
+		GiteaToken:     get("gitea_token"),
+		WorkDir:        get("work_dir"),
+		MaxConcurrent:  maxC,
+		DefaultTimeout: timeout,
+	})
 }
 
 func (s *Server) handleGitSettingsPut(w http.ResponseWriter, r *http.Request) {
         var cfg GitSettings
         if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
-                http.Error(w, err.Error(), 400)
+                http.Error(w, "internal server error", 400)
                 return
         }
         save := func(k, v string) {
@@ -573,29 +609,37 @@ func (s *Server) executeRun(runID, workflowID string) {
                 timeout = 10 * time.Minute
         }
 
-        runCmd := func(cmdStr string) error {
-                if strings.TrimSpace(cmdStr) == "" {
-                        return nil
-                }
-                addLog("info", fmt.Sprintf("$ %s", cmdStr))
-                cmd := exec.Command("bash", "-c", cmdStr)
-                out, err := cmd.CombinedOutput()
-                lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-                for _, line := range lines {
-                        if strings.TrimSpace(line) == "" {
-                                continue
-                        }
-                        lvl := "info"
-                        lower := strings.ToLower(line)
-                        if strings.Contains(lower, "error") || strings.Contains(lower, "fatal") {
-                                lvl = "error"
-                        } else if strings.Contains(lower, "warn") {
-                                lvl = "warn"
-                        }
-                        addLog(lvl, line)
-                }
-                return err
-        }
+	runCmd := func(cmdStr string) error {
+		if strings.TrimSpace(cmdStr) == "" {
+			return nil
+		}
+		if !allowedGitCmdPattern.MatchString(cmdStr) {
+			addLog("error", fmt.Sprintf("rejected command with unsafe characters: %q", cmdStr))
+			return fmt.Errorf("command contains unsafe characters")
+		}
+		addLog("info", fmt.Sprintf("$ %s", cmdStr))
+		parts := strings.Fields(cmdStr)
+		if len(parts) == 0 {
+			return nil
+		}
+		cmd := exec.Command(parts[0], parts[1:]...)
+		out, err := cmd.CombinedOutput()
+		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+		for _, line := range lines {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			lvl := "info"
+			lower := strings.ToLower(line)
+			if strings.Contains(lower, "error") || strings.Contains(lower, "fatal") {
+				lvl = "error"
+			} else if strings.Contains(lower, "warn") {
+				lvl = "warn"
+			}
+			addLog(lvl, line)
+		}
+		return err
+	}
 
         // Pre-commands
         var pre []string

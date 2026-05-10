@@ -1,30 +1,64 @@
-# Go
-/orbit
+# ─── Go ────────────────────────────────────────────────────────────
+/orbit/
 /dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
 *.test
 *.out
 coverage.txt
+coverage.html
+go.work
+go.work.sum
+vendor/
 
-# Frontend build output (embedded at build time — not committed)
+# ─── Frontend build (embedded at build time) ───────────────────────
 internal/api/static/assets/
 internal/api/static/*.js
 internal/api/static/*.css
 internal/api/static/*.html
+internal/api/static/*.map
 
-# Frontend
+# ─── Frontend source ───────────────────────────────────────────────
 web/node_modules/
 web/dist/
+web/dist-ssr/
+web/*.log
+web/*.tsbuildinfo
+web/.env
+web/.env.local
+web/.env.*.local
 
-# Env / secrets
+# ─── Secrets & config ──────────────────────────────────────────────
 .env
+.env.*
+!.env.example
 *.local
 orbit.toml
+*secrets*
+*.key
+*.pem
 
-# OS
+# ─── OS files ──────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+.directory
+*.pid
+*.seed
 
-# Editor
+# ─── Editors ───────────────────────────────────────────────────────
 .idea/
 .vscode/
 *.swp
+*~
+.tern-port
+.vs/
+*.code-workspace
+
+# ─── Debug & temp ──────────────────────────────────────────────────
+*.log
+tmp/
+temp/
+*.tmp

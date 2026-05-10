@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -128,7 +129,7 @@ func (s *Server) handlePipelineCreate(w http.ResponseWriter, r *http.Request) {
 		req.Name, req.Description,
 	)
 	if err != nil {
-		http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
 	req.ID, _ = res.LastInsertId()
@@ -218,7 +219,7 @@ func (s *Server) handlePipelineStageCreate(w http.ResponseWriter, r *http.Reques
 	}
 	stageID, err := s.insertPipelineStage(r, req)
 	if err != nil {
-		http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
 	req.ID = stageID
@@ -552,6 +553,30 @@ func (s *Server) executePipelineRun(runID, pipelineID int64, stages []pipelineSt
 		workDir := stage.WorkingDir
 		if workDir == "" {
 			workDir = "/"
+		} else {
+			workDir = filepath.Clean(workDir)
+			if strings.Contains(workDir, "..") || !filepath.IsAbs(workDir) {
+				s.db.SQL.ExecContext(ctx, //nolint:errcheck
+					`UPDATE pipeline_stage_runs SET status='failed', output='invalid working directory', exit_code=-1, ended_at=unixepoch() WHERE id=?`,
+					stageRunID,
+				)
+				if !stage.ContinueOnFail {
+					overallStatus = "failed"
+				}
+				continue
+			}
+		}
+
+		// Validate command against allowed pattern before execution
+		if !allowedGitCmdPattern.MatchString(stage.Command) {
+			s.db.SQL.ExecContext(ctx, //nolint:errcheck
+				`UPDATE pipeline_stage_runs SET status='failed', output='command contains disallowed characters', exit_code=-1, ended_at=unixepoch() WHERE id=?`,
+				stageRunID,
+			)
+			if !stage.ContinueOnFail {
+				overallStatus = "failed"
+			}
+			continue
 		}
 
 		cmd := exec.CommandContext(cmdCtx, "sh", "-c", stage.Command)

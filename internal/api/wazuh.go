@@ -7,7 +7,9 @@ import (
         "encoding/json"
         "fmt"
         "io"
+        "net"
         "net/http"
+        "net/url"
         "os"
         "os/exec"
         "path/filepath"
@@ -18,6 +20,12 @@ import (
 )
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+// allowedHostPattern matches valid hostnames and IP addresses.
+var allowedHostPattern = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9\-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9\-]{0,61}[A-Za-z0-9])?)*(:[0-9]{1,5})?$`)
+
+// reWazuhAgentID validates agent ID parameters to prevent command injection.
+var reWazuhAgentID = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 type wazuhStatus struct {
         Installed      bool   `json:"installed"`
@@ -188,11 +196,23 @@ func wazuhVersion() string {
 }
 
 func wazuhGetAPIConfig() wazuhAPIConfig {
+        username := os.Getenv("WAZUH_API_USERNAME")
+        password := os.Getenv("WAZUH_API_PASSWORD")
+        if username == "" || password == "" {
+                // Return empty config — callers (wazuhAPIRequest) will fail with auth error.
+                // This prevents fallback to hardcoded default credentials.
+                return wazuhAPIConfig{
+                        URL:      "https://localhost",
+                        Port:     55000,
+                        Username: "",
+                        Password: "",
+                }
+        }
         return wazuhAPIConfig{
                 URL:      "https://localhost",
                 Port:     55000,
-                Username: "wazuh",
-                Password: "wazuh",
+                Username: username,
+                Password: password,
         }
 }
 
@@ -207,7 +227,7 @@ func wazuhAPIRequest(method, endpoint string, body interface{}) (map[string]inte
                 return nil, 0, err
         }
         req.SetBasicAuth(cfg.Username, cfg.Password)
-        tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+        tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: false}}
         client := &http.Client{Transport: tr, Timeout: 10 * time.Second}
         resp, err := client.Do(req)
         if err != nil {
@@ -584,6 +604,10 @@ func (s *Server) handleWazuhAgentGet(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleWazuhAgentRestart(w http.ResponseWriter, r *http.Request) {
         id := r.PathValue("id")
+        if !reWazuhAgentID.MatchString(id) {
+                http.Error(w, `{"error":"invalid agent id"}`, 400)
+                return
+        }
         out, err := exec.Command("/var/ossec/bin/agent_control", "-R", "-u", id).CombinedOutput()
         ok := err == nil
         if !ok {
@@ -596,6 +620,10 @@ func (s *Server) handleWazuhAgentRestart(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) handleWazuhAgentDelete(w http.ResponseWriter, r *http.Request) {
         id := r.PathValue("id")
+        if !reWazuhAgentID.MatchString(id) {
+                http.Error(w, `{"error":"invalid agent id"}`, 400)
+                return
+        }
         out, err := exec.Command("/var/ossec/bin/manage_agents", "-r", id).CombinedOutput()
         ok := err == nil
         if !ok {
@@ -787,6 +815,10 @@ func (s *Server) handleWazuhConfigSave(w http.ResponseWriter, r *http.Request) {
                 req.Path = "/var/ossec/etc/ossec.conf"
         }
         // Validate path stays within the expected Wazuh config directory
+        if strings.Contains(req.Path, "..") {
+                writeJSON(w, map[string]interface{}{"ok": false, "output": "invalid config path"})
+                return
+        }
         req.Path = filepath.Clean(req.Path)
         if !strings.HasPrefix(req.Path, "/var/ossec/") && !strings.HasPrefix(req.Path, "/etc/ossec") {
                 writeJSON(w, map[string]interface{}{"ok": false, "output": "invalid config path"})
@@ -851,109 +883,163 @@ func (s *Server) handleWazuhStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleWazuhInstall(w http.ResponseWriter, r *http.Request) {
-        var req struct {
-                Mode string `json:"mode"` // "manager", "agent", "all-in-one"
-                ManagerIP string `json:"manager_ip"`
-                AgentName string `json:"agent_name"`
-        }
-        json.NewDecoder(r.Body).Decode(&req)
-        if req.Mode == "" {
-                req.Mode = "all-in-one"
-        }
+	var req struct {
+		Mode      string `json:"mode"`
+		ManagerIP string `json:"manager_ip"`
+		AgentName string `json:"agent_name"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+	if req.Mode == "" {
+		req.Mode = "all-in-one"
+	}
 
-        var script string
-        switch req.Mode {
-        case "agent":
-                managerIP := req.ManagerIP
-                if managerIP == "" {
-                        managerIP = "wazuh-manager"
-                }
-                script = fmt.Sprintf(`#!/bin/bash
-set -e
-echo "[1/5] Adding Wazuh repository..."
-curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | apt-key add -
-echo "deb https://packages.wazuh.com/4.x/apt/ stable main" | tee /etc/apt/sources.list.d/wazuh.list
-apt-get update -q
+	env := append(os.Environ(), "DEBIAN_FRONTEND=noninteractive")
+	var buf bytes.Buffer
+	writeLine := func(format string, a ...interface{}) {
+		buf.WriteString(fmt.Sprintf(format+"\n", a...))
+	}
 
-echo "[2/5] Installing Wazuh agent..."
-WAZUH_MANAGER="%s" apt-get install -y wazuh-agent
+	run := func(bin string, args ...string) error {
+		cmd := exec.Command(bin, args...)
+		cmd.Env = env
+		cmd.Stdout = &buf
+		cmd.Stderr = &buf
+		return cmd.Run()
+	}
 
-echo "[3/5] Configuring agent..."
-sed -i 's|MANAGER_IP|%s|g' /var/ossec/etc/ossec.conf
+	var ok bool
 
-echo "[4/5] Enabling and starting agent..."
-systemctl daemon-reload
-systemctl enable wazuh-agent
-systemctl start wazuh-agent
+	switch req.Mode {
+	case "agent":
+		managerIP := req.ManagerIP
+		if managerIP == "" {
+			managerIP = "wazuh-manager"
+		} else if !allowedHostPattern.MatchString(managerIP) {
+			writeJSON(w, map[string]interface{}{"ok": false, "output": "invalid manager_ip"})
+			return
+		}
 
-echo "[5/5] Done! Agent is running."
-systemctl status wazuh-agent --no-pager`, managerIP, managerIP)
-        case "all-in-one":
-                script = `#!/bin/bash
-set -e
-echo "[1/6] Downloading Wazuh installer..."
-curl -sO https://packages.wazuh.com/4.7/wazuh-install.sh
+		// Step 1: Add Wazuh repository
+		writeLine("[1/5] Adding Wazuh repository...")
+		if err := run("curl", "-s", "-o", "/tmp/wazuh-key", "https://packages.wazuh.com/key/GPG-KEY-WAZUH"); err != nil {
+			writeJSON(w, map[string]interface{}{"ok": false, "output": buf.String()})
+			return
+		}
+		if err := run("apt-key", "add", "/tmp/wazuh-key"); err != nil {
+			writeJSON(w, map[string]interface{}{"ok": false, "output": buf.String()})
+			return
+		}
+		wazuhRepoList := "deb https://packages.wazuh.com/4.x/apt/ stable main\n"
+		run("bash", "-c", fmt.Sprintf("echo '%s' > /etc/apt/sources.list.d/wazuh.list", wazuhRepoList))
+		if err := run("apt-get", "update", "-q"); err != nil {
+			writeJSON(w, map[string]interface{}{"ok": false, "output": buf.String()})
+			return
+		}
 
-echo "[2/6] Running all-in-one installation (this may take 5-10 minutes)..."
-bash ./wazuh-install.sh -a -i
+		// Step 2: Install agent
+		writeLine("[2/5] Installing Wazuh agent...")
+		installCmd := exec.Command("apt-get", "install", "-y", "wazuh-agent")
+		installCmd.Env = append(env, "WAZUH_MANAGER="+managerIP)
+		installCmd.Stdout = &buf
+		installCmd.Stderr = &buf
+		if err := installCmd.Run(); err != nil {
+			writeJSON(w, map[string]interface{}{"ok": false, "output": buf.String()})
+			return
+		}
 
-echo "[3/6] Verifying services..."
-systemctl status wazuh-manager --no-pager || true
-systemctl status wazuh-indexer --no-pager || true
-systemctl status wazuh-dashboard --no-pager || true
+		// Step 3: Configure agent
+		writeLine("[3/5] Configuring agent...")
+		sedExpr := "s|MANAGER_IP|" + managerIP + "|g"
+		if err := run("sed", "-i", sedExpr, "/var/ossec/etc/ossec.conf"); err != nil {
+			// non-fatal: config may have already been templated
+			writeLine("(sed note: %s)", err)
+		}
 
-echo "[4/6] Getting initial credentials..."
-cat /home/wazuh-passwords.txt 2>/dev/null || echo "See install output above for credentials"
+		// Step 4: Enable and start agent
+		writeLine("[4/5] Enabling and starting agent...")
+		run("systemctl", "daemon-reload")
+		run("systemctl", "enable", "wazuh-agent")
+		run("systemctl", "start", "wazuh-agent")
 
-echo "[5/6] Enabling services on boot..."
-systemctl enable wazuh-manager wazuh-indexer wazuh-dashboard 2>/dev/null || true
+		// Step 5: Status
+		writeLine("[5/5] Done! Agent is running.")
+		run("systemctl", "status", "wazuh-agent", "--no-pager")
+		ok = true
 
-echo "[6/6] Installation complete!"
-echo "Dashboard: https://$(hostname -I | awk '{print $1}')"
-echo "Manager API: https://$(hostname -I | awk '{print $1}'):55000"`
-        default: // manager
-                script = `#!/bin/bash
-set -e
-echo "[1/5] Adding Wazuh repository..."
-curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | apt-key add -
-echo "deb https://packages.wazuh.com/4.x/apt/ stable main" | tee /etc/apt/sources.list.d/wazuh.list
-apt-get update -q
+	case "all-in-one":
+		writeLine("[1/6] Downloading Wazuh installer...")
+		if err := run("curl", "-sO", "https://packages.wazuh.com/4.7/wazuh-install.sh"); err != nil {
+			writeJSON(w, map[string]interface{}{"ok": false, "output": buf.String()})
+			return
+		}
+		writeLine("[2/6] Running all-in-one installation (this may take 5-10 minutes)...")
+		if err := run("bash", "./wazuh-install.sh", "-a", "-i"); err != nil {
+			writeJSON(w, map[string]interface{}{"ok": false, "output": buf.String()})
+			return
+		}
+		writeLine("[3/6] Verifying services...")
+		run("systemctl", "status", "wazuh-manager", "--no-pager")
+		run("systemctl", "status", "wazuh-indexer", "--no-pager")
+		run("systemctl", "status", "wazuh-dashboard", "--no-pager")
+		writeLine("[4/6] Getting initial credentials...")
+		run("cat", "/home/wazuh-passwords.txt")
+		writeLine("[5/6] Enabling services on boot...")
+		run("systemctl", "enable", "wazuh-manager", "wazuh-indexer", "wazuh-dashboard")
+		writeLine("[6/6] Installation complete!")
+		ok = true
 
-echo "[2/5] Installing Wazuh manager..."
-apt-get install -y wazuh-manager
+	default: // manager
+		writeLine("[1/5] Adding Wazuh repository...")
+		if err := run("curl", "-s", "-o", "/tmp/wazuh-key", "https://packages.wazuh.com/key/GPG-KEY-WAZUH"); err != nil {
+			writeJSON(w, map[string]interface{}{"ok": false, "output": buf.String()})
+			return
+		}
+		if err := run("apt-key", "add", "/tmp/wazuh-key"); err != nil {
+			writeJSON(w, map[string]interface{}{"ok": false, "output": buf.String()})
+			return
+		}
+		wazuhRepoList := "deb https://packages.wazuh.com/4.x/apt/ stable main\n"
+		run("bash", "-c", fmt.Sprintf("echo '%s' > /etc/apt/sources.list.d/wazuh.list", wazuhRepoList))
+		if err := run("apt-get", "update", "-q"); err != nil {
+			writeJSON(w, map[string]interface{}{"ok": false, "output": buf.String()})
+			return
+		}
+		writeLine("[2/5] Installing Wazuh manager...")
+		if err := run("apt-get", "install", "-y", "wazuh-manager"); err != nil {
+			writeJSON(w, map[string]interface{}{"ok": false, "output": buf.String()})
+			return
+		}
+		writeLine("[3/5] Enabling and starting manager...")
+		run("systemctl", "daemon-reload")
+		run("systemctl", "enable", "wazuh-manager")
+		run("systemctl", "start", "wazuh-manager")
+		writeLine("[4/5] Installing Wazuh API...")
+		run("apt-get", "install", "-y", "wazuh-api")
+		writeLine("[5/5] Done! Manager is running.")
+		run("systemctl", "status", "wazuh-manager", "--no-pager")
+		ok = true
+	}
 
-echo "[3/5] Enabling and starting manager..."
-systemctl daemon-reload
-systemctl enable wazuh-manager
-systemctl start wazuh-manager
-
-echo "[4/5] Installing Wazuh API..."
-apt-get install -y wazuh-api 2>/dev/null || true
-
-echo "[5/5] Done! Manager is running."
-systemctl status wazuh-manager --no-pager`
-        }
-
-        cmd := exec.Command("bash", "-c", script)
-        cmd.Env = append(os.Environ(), "DEBIAN_FRONTEND=noninteractive")
-        var buf bytes.Buffer
-        cmd.Stdout = &buf
-        cmd.Stderr = &buf
-        err := cmd.Run()
-        writeJSON(w, map[string]interface{}{
-                "ok":     err == nil,
-                "output": buf.String(),
-        })
+	writeJSON(w, map[string]interface{}{
+		"ok":     ok,
+		"output": buf.String(),
+	})
 }
 
 func (s *Server) handleWazuhAgentInstallScript(w http.ResponseWriter, r *http.Request) {
         managerIP := r.URL.Query().Get("manager_ip")
         if managerIP == "" {
                 managerIP = "YOUR_MANAGER_IP"
+        } else if !isValidHostOrIP(managerIP) {
+                http.Error(w, "invalid manager_ip", http.StatusBadRequest)
+                return
         }
         agentName := r.URL.Query().Get("agent_name")
         if agentName == "" {
                 agentName = "my-server"
+        } else if !reWazuhAgentID.MatchString(agentName) {
+                http.Error(w, "invalid agent_name", http.StatusBadRequest)
+                return
         }
         os_ := r.URL.Query().Get("os")
         var script string
@@ -997,19 +1083,49 @@ func (s *Server) handleWazuhAPITest(w http.ResponseWriter, r *http.Request) {
                 writeJSON(w, map[string]interface{}{"ok": false, "error": "URL must start with http:// or https://"})
                 return
         }
+        // SSRF prevention: reject private and loopback IP addresses
+        parsedURL, err := url.Parse(req.URL)
+        if err != nil {
+                writeJSON(w, map[string]interface{}{"ok": false, "error": "invalid URL"})
+                return
+        }
+        host := parsedURL.Hostname()
+        if host == "" {
+                writeJSON(w, map[string]interface{}{"ok": false, "error": "invalid URL host"})
+                return
+        }
+        if ip := net.ParseIP(host); ip != nil {
+                if ip.IsLoopback() || isPrivateIP(ip) {
+                        writeJSON(w, map[string]interface{}{"ok": false, "error": "cannot connect to private or loopback address"})
+                        return
+                }
+        } else {
+                ips, err := net.LookupHost(host)
+                if err != nil {
+                        writeJSON(w, map[string]interface{}{"ok": false, "error": "cannot resolve host"})
+                        return
+                }
+                for _, ipStr := range ips {
+                        ip := net.ParseIP(ipStr)
+                        if ip != nil && (ip.IsLoopback() || isPrivateIP(ip)) {
+                                writeJSON(w, map[string]interface{}{"ok": false, "error": "cannot connect to private or loopback address"})
+                                return
+                        }
+                }
+        }
         baseURL := fmt.Sprintf("%s:%d", req.URL, req.Port)
         authURL := baseURL + "/security/user/authenticate"
         httpReq, err := http.NewRequest("POST", authURL, nil)
         if err != nil {
-                writeJSON(w, map[string]interface{}{"ok": false, "error": err.Error()})
+                writeJSON(w, map[string]interface{}{"ok": false, "error": "operation failed"})
                 return
         }
         httpReq.SetBasicAuth(req.Username, req.Password)
-        tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+        tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: false}}
         client := &http.Client{Transport: tr, Timeout: 5 * time.Second}
         resp, err := client.Do(httpReq)
         if err != nil {
-                writeJSON(w, map[string]interface{}{"ok": false, "error": err.Error()})
+                writeJSON(w, map[string]interface{}{"ok": false, "error": "operation failed"})
                 return
         }
         defer resp.Body.Close()

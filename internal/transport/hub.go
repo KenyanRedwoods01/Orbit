@@ -4,13 +4,32 @@ package transport
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true }, // TODO: restrict to same origin
+	CheckOrigin: func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return false
+		}
+		host := r.Host
+		originHost := strings.TrimPrefix(strings.TrimPrefix(origin, "https://"), "http://")
+		originHost = strings.Split(originHost, ":")[0]
+		requestHost := strings.Split(host, ":")[0]
+		// Only allow same-origin or localhost connections
+		if strings.EqualFold(originHost, requestHost) {
+			return true
+		}
+		// Allow loopback for dev
+		if originHost == "localhost" || originHost == "127.0.0.1" {
+			return true
+		}
+		return false
+	},
 }
 
 // Message is the JSON envelope sent over the WebSocket connection.

@@ -125,13 +125,15 @@ func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request) {
         json.NewEncoder(w).Encode(info) //nolint:errcheck
 }
 
-// isPrivateIP returns true for RFC-1918 / CGNAT address ranges.
+// isPrivateIP returns true for private, link-local, and loopback address ranges.
 func isPrivateIP(ip net.IP) bool {
         privateRanges := []string{
                 "10.0.0.0/8",
                 "172.16.0.0/12",
                 "192.168.0.0/16",
                 "100.64.0.0/10",
+                "127.0.0.0/8",
+                "169.254.0.0/16",
         }
         for _, cidr := range privateRanges {
                 _, network, err := net.ParseCIDR(cidr)
