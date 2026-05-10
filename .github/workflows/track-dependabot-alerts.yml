@@ -1,0 +1,31 @@
+name: Track Dependabot Alerts
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"    # Every 30 minutes
+  workflow_dispatch:           # Manual trigger for testing
+
+concurrency:
+  group: dependabot-alert-sync
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+  security-events: read
+
+jobs:
+  sync-alerts:
+    name: Sync Dependabot alerts → issues
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Sync Dependabot alerts
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        env:
+          BOT_ACTION: sync-dependabot-alerts
+        with:
+          script: |
+            const bot = require('.github/scripts/community-bot.js');
+            await bot({ github, context, core });

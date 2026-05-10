@@ -669,6 +669,144 @@
       <h3>GitHub Actions</h3>
       <p>Trigger and monitor GitHub Actions workflows directly from the Orbit dashboard.</p>
     </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="color:var(--purple)"><i class="fas fa-user-circle"></i></div>
+      <h3>Profile & 2FA Management</h3>
+      <p>Full user profile page — change username, password, avatar color, bio, and manage TOTP 2FA with backup codes from one screen.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="color:var(--cyan)"><i class="fas fa-database"></i></div>
+      <h3>Database Explorer</h3>
+      <p>Connect MySQL, PostgreSQL, and SQLite databases. Browse tables, run queries, and monitor connection health.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="color:var(--yellow)"><i class="fas fa-network-wired"></i></div>
+      <h3>Port Scanner</h3>
+      <p>Real-time view of all open ports with process binding, protocol, and firewall rule correlation.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ── PROFILE & SECURITY ─────────────────────────────────────────────────── -->
+<section id="profile-security">
+  <div class="section-label">Profile &amp; Security</div>
+  <h2>Enterprise-grade account security</h2>
+  <p>Every user account has a comprehensive self-service security center. Manage your identity, 2FA, and sessions without admin intervention.</p>
+  <div class="features" style="margin-top:2rem;">
+    <div class="feature-card" style="border-color:rgba(167,139,250,0.2);background:rgba(167,139,250,0.04);">
+      <div class="feature-icon" style="color:var(--purple)"><i class="fas fa-user-shield"></i></div>
+      <h3>TOTP Two-Factor Auth</h3>
+      <p>Enable TOTP 2FA with any authenticator app (Google Authenticator, Authy, 1Password). QR code setup, manual key entry, and 10 single-use backup codes included.</p>
+    </div>
+    <div class="feature-card" style="border-color:rgba(34,211,238,0.2);background:rgba(34,211,238,0.04);">
+      <div class="feature-icon" style="color:var(--cyan)"><i class="fas fa-chart-pie"></i></div>
+      <h3>Security Score</h3>
+      <p>Real-time security score (0–100) based on 2FA status, backup code count, profile completeness. Actionable checklist of what to fix next.</p>
+    </div>
+    <div class="feature-card" style="border-color:rgba(251,191,36,0.2);background:rgba(251,191,36,0.04);">
+      <div class="feature-icon" style="color:var(--yellow)"><i class="fas fa-history"></i></div>
+      <h3>Activity &amp; Session Log</h3>
+      <p>Full audit trail of every login, password change, and 2FA event. Active session list with one-click revocation from any device.</p>
+    </div>
+    <div class="feature-card" style="border-color:rgba(59,130,246,0.2);background:rgba(59,130,246,0.04);">
+      <div class="feature-icon"><i class="fas fa-id-card"></i></div>
+      <h3>Profile Customization</h3>
+      <p>Display name, bio, avatar color picker, and email. Inline username and password change with strength meter. All fields update in real-time without page reload.</p>
+    </div>
+  </div>
+
+  <div style="margin-top:2rem;padding:1.5rem;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border);">
+          <th style="text-align:left;padding:8px 12px;color:var(--text2);font-weight:600;">Profile Feature</th>
+          <th style="padding:8px 12px;color:var(--text2);font-weight:600;text-align:center;">Orbit</th>
+          <th style="padding:8px 12px;color:var(--text2);font-weight:600;text-align:center;">Netdata</th>
+          <th style="padding:8px 12px;color:var(--text2);font-weight:600;text-align:center;">Grafana</th>
+          <th style="padding:8px 12px;color:var(--text2);font-weight:600;text-align:center;">Portainer</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:8px 12px;color:var(--text);">TOTP 2FA</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--accent2);">✓</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--text3);">—</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--accent2);">✓</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--accent2);">✓</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:8px 12px;color:var(--text);">Backup codes</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--accent2);">✓</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--text3);">—</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--accent2);">✓</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--text3);">—</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:8px 12px;color:var(--text);">Session management</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--accent2);">✓</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--text3);">—</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--accent2);">✓</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--text3);">—</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:8px 12px;color:var(--text);">Account activity log</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--accent2);">✓</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--text3);">—</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--text3);">—</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--text3);">—</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px;color:var(--text);">Security score</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--accent2);">✓</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--text3);">—</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--text3);">—</td>
+          <td style="padding:8px 12px;text-align:center;color:var(--text3);">—</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ── TECH STACK ──────────────────────────────────────────────────────────── -->
+<section id="stack">
+  <div class="section-label">Tech Stack</div>
+  <h2>Built for reliability</h2>
+  <p>Zero runtime dependencies. One binary. Ships with a built-in React SPA and SQLite database.</p>
+  <div class="features" style="margin-top:1.5rem;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));">
+    <div class="feature-card" style="padding:1rem 1.25rem;">
+      <div class="feature-icon" style="font-size:0.8rem;font-family:var(--mono);color:var(--accent-lt);letter-spacing:0.05em;">Go 1.22</div>
+      <h3 style="font-size:0.9rem;">Backend</h3>
+      <p style="font-size:0.78rem;">Standard library HTTP, net/http ServeMux, goroutine-per-request concurrency, zero framework overhead.</p>
+    </div>
+    <div class="feature-card" style="padding:1rem 1.25rem;">
+      <div class="feature-icon" style="font-size:0.8rem;font-family:var(--mono);color:var(--cyan);letter-spacing:0.05em;">React 18</div>
+      <h3 style="font-size:0.9rem;">Frontend</h3>
+      <p style="font-size:0.78rem;">Vite 5, TypeScript, TanStack Query v5, Recharts, Zustand, React Router v6. CSS Modules.</p>
+    </div>
+    <div class="feature-card" style="padding:1rem 1.25rem;">
+      <div class="feature-icon" style="font-size:0.8rem;font-family:var(--mono);color:var(--yellow);letter-spacing:0.05em;">SQLite</div>
+      <h3 style="font-size:0.9rem;">Storage</h3>
+      <p style="font-size:0.78rem;">mattn/go-sqlite3 for relational data. BoltDB for ephemeral metrics ring buffers. No external DB required.</p>
+    </div>
+    <div class="feature-card" style="padding:1rem 1.25rem;">
+      <div class="feature-icon" style="font-size:0.8rem;font-family:var(--mono);color:var(--accent2);letter-spacing:0.05em;">WebSocket</div>
+      <h3 style="font-size:0.9rem;">Real-time</h3>
+      <p style="font-size:0.78rem;">Native WebSocket streams for metrics, logs, and terminal. No polling. Sub-100ms latency on LAN.</p>
+    </div>
+    <div class="feature-card" style="padding:1rem 1.25rem;">
+      <div class="feature-icon" style="font-size:0.8rem;font-family:var(--mono);color:var(--danger);letter-spacing:0.05em;">JWT + TOTP</div>
+      <h3 style="font-size:0.9rem;">Auth</h3>
+      <p style="font-size:0.78rem;">bcrypt password hashing, JWT session tokens, TOTP 2FA (RFC 6238), backup codes, RBAC roles.</p>
+    </div>
+    <div class="feature-card" style="padding:1rem 1.25rem;">
+      <div class="feature-icon" style="font-size:0.8rem;font-family:var(--mono);color:var(--purple);letter-spacing:0.05em;">MCP</div>
+      <h3 style="font-size:0.9rem;">AI Integration</h3>
+      <p style="font-size:0.78rem;">Model Context Protocol server over Unix socket or TCP. Tools for metrics, services, firewall, and deployment.</p>
+    </div>
   </div>
 </section>
 

@@ -75,7 +75,7 @@ func (s *Server) handleUserCreate(w http.ResponseWriter, r *http.Request) {
 		req.Username, req.Email, hash, req.Role,
 	)
 	if err != nil {
-		http.Error(w, "user already exists or db error: "+err.Error(), http.StatusConflict)
+		http.Error(w, "user already exists or db error", http.StatusConflict)
 		return
 	}
 	id, _ := res.LastInsertId()
@@ -179,6 +179,10 @@ func (s *Server) handleUserChangePassword(w http.ResponseWriter, r *http.Request
 		}
 		if err != nil {
 			http.Error(w, "db error", http.StatusInternalServerError)
+			return
+		}
+		if pwHash == "" {
+			http.Error(w, "current password incorrect", http.StatusUnauthorized)
 			return
 		}
 		if checkErr := auth.CheckPassword(pwHash, req.CurrentPassword); checkErr != nil {

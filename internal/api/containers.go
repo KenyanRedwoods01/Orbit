@@ -6,6 +6,7 @@ import (
         "encoding/json"
         "net/http"
         "os/exec"
+        "strconv"
         "strings"
         "time"
 
@@ -99,54 +100,74 @@ func splitLines(s string) []string {
 }
 
 func (s *Server) handleContainerStart(w http.ResponseWriter, r *http.Request) {
-        id := r.PathValue("id")
-        out, err := exec.Command("docker", "start", id).CombinedOutput()
+	id := r.PathValue("id")
+	if err := validateContainerName(id); err != nil {
+		http.Error(w, "invalid container id", http.StatusBadRequest)
+		return
+	}
+	out, err := exec.Command("docker", "start", id).CombinedOutput()
         if err != nil {
-                http.Error(w, "failed to start container: "+string(out), http.StatusInternalServerError)
+                http.Error(w, "failed to start container", http.StatusInternalServerError)
                 return
         }
         w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleContainerStop(w http.ResponseWriter, r *http.Request) {
-        id := r.PathValue("id")
-        out, err := exec.Command("docker", "stop", id).CombinedOutput()
-        if err != nil {
-                http.Error(w, "failed to stop container: "+string(out), http.StatusInternalServerError)
-                return
-        }
-        w.WriteHeader(http.StatusNoContent)
+	id := r.PathValue("id")
+	if err := validateContainerName(id); err != nil {
+		http.Error(w, "invalid container id", http.StatusBadRequest)
+		return
+	}
+	out, err := exec.Command("docker", "stop", id).CombinedOutput()
+	if err != nil {
+		http.Error(w, "failed to stop container", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleContainerRestart(w http.ResponseWriter, r *http.Request) {
-        id := r.PathValue("id")
-        out, err := exec.Command("docker", "restart", id).CombinedOutput()
-        if err != nil {
-                http.Error(w, "failed to restart container: "+string(out), http.StatusInternalServerError)
-                return
-        }
-        w.WriteHeader(http.StatusNoContent)
+	id := r.PathValue("id")
+	if err := validateContainerName(id); err != nil {
+		http.Error(w, "invalid container id", http.StatusBadRequest)
+		return
+	}
+	out, err := exec.Command("docker", "restart", id).CombinedOutput()
+	if err != nil {
+		http.Error(w, "failed to restart container", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleContainerRemove(w http.ResponseWriter, r *http.Request) {
-        id := r.PathValue("id")
-        force := r.URL.Query().Get("force")
-        args := []string{"rm"}
-        if force == "true" || force == "1" {
-                args = append(args, "-f")
-        }
-        args = append(args, id)
-        out, err := exec.Command("docker", args...).CombinedOutput()
-        if err != nil {
-                http.Error(w, "failed to remove container: "+string(out), http.StatusInternalServerError)
-                return
-        }
-        w.WriteHeader(http.StatusNoContent)
+	id := r.PathValue("id")
+	if err := validateContainerName(id); err != nil {
+		http.Error(w, "invalid container id", http.StatusBadRequest)
+		return
+	}
+	force := r.URL.Query().Get("force")
+	args := []string{"rm"}
+	if force == "true" || force == "1" {
+		args = append(args, "-f")
+	}
+	args = append(args, id)
+	out, err := exec.Command("docker", args...).CombinedOutput()
+	if err != nil {
+		http.Error(w, "failed to remove container", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleContainerInspect(w http.ResponseWriter, r *http.Request) {
-        id := r.PathValue("id")
-        out, err := exec.Command("docker", "inspect", id).Output()
+	id := r.PathValue("id")
+	if err := validateContainerName(id); err != nil {
+		http.Error(w, "invalid container id", http.StatusBadRequest)
+		return
+	}
+	out, err := exec.Command("docker", "inspect", id).Output()
         if err != nil {
                 http.Error(w, "container not found", http.StatusNotFound)
                 return
@@ -162,9 +183,13 @@ func (s *Server) handleContainerInspect(w http.ResponseWriter, r *http.Request) 
 
 // handleContainerStatsWS streams live docker stats over WebSocket.
 func (s *Server) handleContainerStatsWS(w http.ResponseWriter, r *http.Request) {
-        id := r.PathValue("id")
+	id := r.PathValue("id")
+	if err := validateContainerName(id); err != nil {
+		http.Error(w, "invalid container id", http.StatusBadRequest)
+		return
+	}
 
-        conn, err := wsUpgrader.Upgrade(w, r, nil)
+	conn, err := wsUpgrader.Upgrade(w, r, nil)
         if err != nil {
                 return
         }
@@ -206,9 +231,13 @@ func (s *Server) handleContainerStatsWS(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleContainerLogsWS(w http.ResponseWriter, r *http.Request) {
-        id := r.PathValue("id")
+	id := r.PathValue("id")
+	if err := validateContainerName(id); err != nil {
+		http.Error(w, "invalid container id", http.StatusBadRequest)
+		return
+	}
 
-        conn, err := wsUpgrader.Upgrade(w, r, nil)
+	conn, err := wsUpgrader.Upgrade(w, r, nil)
         if err != nil {
                 return
         }
@@ -217,6 +246,9 @@ func (s *Server) handleContainerLogsWS(w http.ResponseWriter, r *http.Request) {
         tail := r.URL.Query().Get("tail")
         if tail == "" {
                 tail = "100"
+        } else if _, err := strconv.Atoi(tail); err != nil || tail[0] == '-' {
+                conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"invalid tail parameter"}`)) //nolint:errcheck
+                return
         }
 
         cmd := exec.CommandContext(r.Context(), "docker", "logs", "--follow", "--tail", tail, id)
@@ -268,16 +300,20 @@ func (s *Server) handleImageList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleImageRemove(w http.ResponseWriter, r *http.Request) {
-        id := r.PathValue("id")
-        force := r.URL.Query().Get("force")
-        args := []string{"rmi"}
-        if force == "true" || force == "1" {
-                args = append(args, "-f")
-        }
-        args = append(args, id)
-        out, err := exec.Command("docker", args...).CombinedOutput()
+	id := r.PathValue("id")
+	if err := validateImageName(id); err != nil {
+		http.Error(w, "invalid image id", http.StatusBadRequest)
+		return
+	}
+	force := r.URL.Query().Get("force")
+	args := []string{"rmi"}
+	if force == "true" || force == "1" {
+		args = append(args, "-f")
+	}
+	args = append(args, id)
+	out, err := exec.Command("docker", args...).CombinedOutput()
         if err != nil {
-                http.Error(w, "failed to remove image: "+string(out), http.StatusInternalServerError)
+                http.Error(w, "failed to remove image", http.StatusInternalServerError)
                 return
         }
         w.WriteHeader(http.StatusNoContent)
@@ -617,18 +653,22 @@ func (s *Server) handleSystemPrune(w http.ResponseWriter, r *http.Request) {
 // ── Image Pull ─────────────────────────────────────────────────────────────────
 
 func (s *Server) handleImagePull(w http.ResponseWriter, r *http.Request) {
-        var req struct {
-                Image string `json:"image"`
-        }
-        if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Image == "" {
-                http.Error(w, "image name required", http.StatusBadRequest)
-                return
-        }
-        out, err := exec.Command("docker", "pull", req.Image).CombinedOutput()
-        if err != nil {
-                http.Error(w, "pull failed: "+string(out), http.StatusInternalServerError)
-                return
-        }
+	var req struct {
+		Image string `json:"image"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Image == "" {
+		http.Error(w, "image name required", http.StatusBadRequest)
+		return
+	}
+	if err := validateImageName(req.Image); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	out, err := exec.Command("docker", "pull", req.Image).CombinedOutput()
+	if err != nil {
+		http.Error(w, "pull failed", http.StatusInternalServerError)
+		return
+	}
         w.Header().Set("Content-Type", "application/json")
         json.NewEncoder(w).Encode(map[string]string{"status": "ok", "output": string(out)}) //nolint:errcheck
 }
@@ -636,45 +676,87 @@ func (s *Server) handleImagePull(w http.ResponseWriter, r *http.Request) {
 // ── Container Create ───────────────────────────────────────────────────────────
 
 func (s *Server) handleContainerCreate(w http.ResponseWriter, r *http.Request) {
-        var req struct {
-                Image   string   `json:"image"`
-                Name    string   `json:"name"`
-                Ports   []string `json:"ports"`
-                Env     []string `json:"env"`
-                Volumes []string `json:"volumes"`
-                Restart string   `json:"restart"`
-                Command []string `json:"command"`
-        }
-        if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Image == "" {
-                http.Error(w, "image name required", http.StatusBadRequest)
-                return
-        }
+	var req struct {
+		Image   string   `json:"image"`
+		Name    string   `json:"name"`
+		Ports   []string `json:"ports"`
+		Env     []string `json:"env"`
+		Volumes []string `json:"volumes"`
+		Restart string   `json:"restart"`
+		Command []string `json:"command"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Image == "" {
+		http.Error(w, "image name required", http.StatusBadRequest)
+		return
+	}
 
-        args := []string{"run", "-d"}
-        if req.Name != "" {
-                args = append(args, "--name", req.Name)
-        }
-        if req.Restart != "" {
-                args = append(args, "--restart", req.Restart)
-        }
-        for _, p := range req.Ports {
-                args = append(args, "-p", p)
-        }
-        for _, e := range req.Env {
-                args = append(args, "-e", e)
-        }
-        for _, v := range req.Volumes {
-                args = append(args, "-v", v)
-        }
-        args = append(args, req.Image)
-        args = append(args, req.Command...)
+	if err := validateImageName(req.Image); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.Name != "" {
+		if err := validateContainerName(req.Name); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 
-        out, err := exec.Command("docker", args...).CombinedOutput()
-        if err != nil {
-                http.Error(w, "create failed: "+string(out), http.StatusInternalServerError)
-                return
-        }
-        id := strings.TrimSpace(string(out))
-        w.Header().Set("Content-Type", "application/json")
-        json.NewEncoder(w).Encode(map[string]string{"id": id}) //nolint:errcheck
+	for _, v := range req.Volumes {
+		if err := validateVolume(v); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	for _, p := range req.Ports {
+		if err := validateDockerPort(p); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	for _, e := range req.Env {
+		if err := validateEnvVar(e); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	if req.Restart != "" {
+		if err := validateRestartPolicy(req.Restart); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	for _, c := range req.Command {
+		if err := validateCommandArg(c); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	args := []string{"run", "-d"}
+	if req.Name != "" {
+		args = append(args, "--name", req.Name)
+	}
+	if req.Restart != "" {
+		args = append(args, "--restart", req.Restart)
+	}
+	for _, p := range req.Ports {
+		args = append(args, "-p", p)
+	}
+	for _, e := range req.Env {
+		args = append(args, "-e", e)
+	}
+	for _, v := range req.Volumes {
+		args = append(args, "-v", v)
+	}
+	args = append(args, req.Image)
+	args = append(args, req.Command...)
+
+	out, err := exec.Command("docker", args...).CombinedOutput()
+	if err != nil {
+		http.Error(w, "create failed", http.StatusInternalServerError)
+		return
+	}
+	id := strings.TrimSpace(string(out))
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"id": id}) //nolint:errcheck
 }

@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1f2e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0d1117;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#238636;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#196127;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3fb950;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#238636;stop-opacity:0" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#238636" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="96" fill="url(#bodyGrad)" stroke="#30363d" stroke-width="2"/>
+
+  <!-- Outer glow ring -->
+  <circle cx="100" cy="100" r="88" fill="none" stroke="#238636" stroke-width="1" opacity="0.3"/>
+
+  <!-- Shield body -->
+  <path d="M100 28 L148 50 L148 102 Q148 140 100 168 Q52 140 52 102 L52 50 Z"
+        fill="url(#shieldGrad)" filter="url(#shadow)"/>
+
+  <!-- Shield inner highlight -->
+  <path d="M100 38 L140 56 L140 102 Q140 134 100 158 Q60 134 60 102 L60 56 Z"
+        fill="none" stroke="#3fb950" stroke-width="1.5" opacity="0.6"/>
+
+  <!-- Robot face plate (white/light panel on shield) -->
+  <rect x="72" y="62" width="56" height="48" rx="10" ry="10"
+        fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+
+  <!-- Robot eyes (LEDs) -->
+  <circle cx="87" cy="81" r="7" fill="#3fb950" filter="url(#glow)"/>
+  <circle cx="113" cy="81" r="7" fill="#3fb950" filter="url(#glow)"/>
+  <circle cx="87" cy="81" r="3.5" fill="#1a1f2e"/>
+  <circle cx="113" cy="81" r="3.5" fill="#1a1f2e"/>
+  <!-- Eye shine -->
+  <circle cx="89" cy="79" r="1.5" fill="#7ee787" opacity="0.9"/>
+  <circle cx="115" cy="79" r="1.5" fill="#7ee787" opacity="0.9"/>
+
+  <!-- Robot mouth (status bar) -->
+  <rect x="80" y="97" width="40" height="6" rx="3" fill="#30363d"/>
+  <rect x="80" y="97" width="28" height="6" rx="3" fill="#3fb950" filter="url(#glow)"/>
+
+  <!-- Antenna -->
+  <line x1="100" y1="28" x2="100" y2="18" stroke="#3fb950" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="100" cy="14" r="5" fill="#3fb950" filter="url(#glow)"/>
+  <circle cx="100" cy="14" r="2.5" fill="#7ee787"/>
+
+  <!-- Ear bolts / side connectors -->
+  <circle cx="52" cy="86" r="5" fill="#21262d" stroke="#3fb950" stroke-width="1.5"/>
+  <circle cx="148" cy="86" r="5" fill="#21262d" stroke="#3fb950" stroke-width="1.5"/>
+
+  <!-- Check mark at bottom of shield (community approved) -->
+  <path d="M83 136 L94 147 L118 122" stroke="#7ee787" stroke-width="4"
+        stroke-linecap="round" stroke-linejoin="round" fill="none" filter="url(#glow)"/>
+
+  <!-- Small orbit rings around the bot -->
+  <ellipse cx="100" cy="100" rx="88" ry="22" fill="none" stroke="#238636"
+           stroke-width="1" stroke-dasharray="4 6" opacity="0.4"
+           transform="rotate(-30 100 100)"/>
+
+  <!-- Stars / sparkles -->
+  <circle cx="34" cy="60" r="2" fill="#3fb950" opacity="0.7"/>
+  <circle cx="166" cy="65" r="1.5" fill="#3fb950" opacity="0.5"/>
+  <circle cx="40" cy="140" r="1.5" fill="#3fb950" opacity="0.6"/>
+  <circle cx="160" cy="135" r="2" fill="#3fb950" opacity="0.7"/>
+  <circle cx="55" cy="170" r="1" fill="#7ee787" opacity="0.5"/>
+  <circle cx="145" cy="170" r="1" fill="#7ee787" opacity="0.5"/>
+</svg>

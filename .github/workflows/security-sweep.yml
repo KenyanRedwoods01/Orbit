@@ -1,0 +1,27 @@
+name: Security Sweep
+
+on:
+  schedule:
+    - cron: "0 0 * * *"    # Daily at midnight UTC
+  workflow_dispatch:        # Manual trigger
+
+permissions:
+  contents: read
+  issues: write
+  security-events: read
+
+jobs:
+  sweep:
+    name: Daily security sweep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Re-open unresolved CVE issues
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        env:
+          BOT_ACTION: security-sweep
+        with:
+          script: |
+            const bot = require('.github/scripts/community-bot.js');
+            await bot({ github, context, core });
