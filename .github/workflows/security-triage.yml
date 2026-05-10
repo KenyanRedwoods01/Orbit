@@ -1,4 +1,4 @@
-name: Security Triage Bot
+name: Security Triage + AutoFix Bot
 
 on:
   schedule:
@@ -8,10 +8,11 @@ on:
 permissions:
   security-events: read
   issues: write
-  contents: read
+  contents: write
+  pull-requests: write
 
 jobs:
-  triage:
+  security:
     runs-on: ubuntu-latest
 
     steps:
@@ -26,8 +27,8 @@ jobs:
       - name: Install dependencies
         run: npm install @octokit/rest
 
-      - name: Run triage script
+      - name: Run Security Bot
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-        run: node scripts/security-triage.js
+        run: node .github/scripts/security-triage.js
