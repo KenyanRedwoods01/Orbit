@@ -1,4 +1,4 @@
-name: Security Triage + AutoFix Bot
+name: Security Triage + Discussions Bot
 
 on:
   schedule:
@@ -8,27 +8,24 @@ on:
 permissions:
   security-events: read
   issues: write
-  contents: write
-  pull-requests: write
+  discussions: write
+  contents: read
 
 jobs:
   security:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install dependencies
-        run: npm install @octokit/rest
+      - run: npm install @octokit/rest
 
-      - name: Run Security Bot
+      - name: Run bot
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-        run: node .github/scripts/security-triage.js
+        run: node .github/scripts/security-discussion-bot.js
