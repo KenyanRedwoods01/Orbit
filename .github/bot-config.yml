@@ -1,0 +1,85 @@
+##############################################################################
+# Orbit Community Bot — Configuration
+# Used by community-bot.js and related workflows
+##############################################################################
+
+bot:
+  name: "orbit-community-bot"
+  logo: ".github/assets/community-bot-logo.svg"
+
+# ── Dependabot alert tracking ─────────────────────────────────────────────────
+dependabot_tracking:
+  enabled: true
+  create_issues: true
+  auto_close:
+    enabled: true
+    on_pr_merge: true
+  batch_alerts: true
+  batch_window_minutes: 10
+  min_severity: "moderate"    # moderate | high | critical
+  labels:
+    - dependabot-alert
+    - security
+    - auto-tracked
+
+# ── CI failure tracking ───────────────────────────────────────────────────────
+ci_failure_tracking:
+  enabled: true
+  watched_workflows:
+    - "CI"
+    - "Security Scan"
+    - "Security Scan (Extended)"
+  labels:
+    - ci-failure
+    - auto-bot
+  auto_close_on_success: true
+
+# ── Security sweep ────────────────────────────────────────────────────────────
+security_sweep:
+  schedule: "0 0 * * *"         # Daily at midnight UTC
+  reopen_threshold_days: 7      # Re-open if still vulnerable after N days
+  wontfix_label: "wontfix"      # Issues with this label are never re-opened
+  labels:
+    - security-sweep
+    - needs-attention
+
+# ── PR labeler ────────────────────────────────────────────────────────────────
+pr_labeler:
+  enabled: true
+  size_labels:
+    xs: { max_changes: 10,   label: "size/XS" }
+    s:  { max_changes: 50,   label: "size/S"  }
+    m:  { max_changes: 200,  label: "size/M"  }
+    l:  { max_changes: 500,  label: "size/L"  }
+    xl: { max_changes: 9999, label: "size/XL" }
+  path_labels:
+    "internal/api/**":   ["backend", "api"]
+    "internal/auth/**":  ["backend", "security"]
+    "web/src/**":        ["frontend"]
+    ".github/**":        ["ci/cd"]
+    "Dockerfile":        ["docker"]
+    "go.mod":            ["dependencies"]
+    "web/package*.json": ["dependencies"]
+    "docs/**":           ["documentation"]
+    "*.md":              ["documentation"]
+    "internal/api/security*.go": ["security"]
+
+# ── Contributor recognition ───────────────────────────────────────────────────
+contributor_recognition:
+  enabled: true
+  first_pr_label: "first-contribution"
+  milestones:
+    - count: 1,  badge: "🌱 First contribution"
+    - count: 5,  badge: "⭐ Regular contributor"
+    - count: 10, badge: "🚀 Core contributor"
+
+# ── Stale management ──────────────────────────────────────────────────────────
+stale:
+  days_before_stale: 90
+  days_before_close: 14
+  exempt_labels:
+    - bug
+    - security
+    - enhancement
+    - pinned
+    - dependencies

@@ -1,3 +1,4 @@
 .orbit-data/metrics.db filter=lfs diff=lfs merge=lfs -text
 Orbit-BACKEND-1/.orbit-data/metrics.db filter=lfs diff=lfs merge=lfs -text
 Orbit-BACKEND-1/Orbit-BACKEND-1/.orbit-data/metrics.db filter=lfs diff=lfs merge=lfs -text
+zipFile.zip filter=lfs diff=lfs merge=lfs -text
