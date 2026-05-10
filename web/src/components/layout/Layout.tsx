@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth'
-import { logout } from '@/lib/api'
+import { logout, clearCSRFToken } from '@/lib/api'
 import { useServerInfo } from '@/lib/useServerInfo'
 import ToastContainer from '@/components/ui/Toast'
 import styles from './Layout.module.css'
@@ -38,6 +38,7 @@ function IconBell()           { return <svg viewBox="0 0 20 20" fill="none" stro
 function IconPlugins()        { return <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M7 3h6v2a2 2 0 0 0 2 2h2v6h-2a2 2 0 0 0-2 2v2H7v-2a2 2 0 0 0-2-2H3V7h2a2 2 0 0 0 2-2V3z"/></svg> }
 function IconPorts()          { return <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="16" height="9" rx="1.5"/><path d="M6 6V4M10 6V4M14 6V4"/><circle cx="10" cy="10.5" r="1.3" fill="currentColor" stroke="none"/></svg> }
 function IconDatabase()       { return <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="10" cy="5" rx="7" ry="2.5"/><path d="M3 5v4c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V5"/><path d="M3 9v4c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V9"/><path d="M3 13v3c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-3"/></svg> }
+function IconProfile()        { return <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="7" r="3.5"/><path d="M3 18c0-4 3.1-6 7-6s7 2 7 6"/></svg> }
 function IconApps()           { return <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="7" height="7" rx="1.5"/><rect x="11" y="2" width="7" height="7" rx="1.5"/><rect x="2" y="11" width="7" height="7" rx="1.5"/><rect x="11" y="11" width="7" height="7" rx="1.5"/></svg> }
 function IconSearch()         { return <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="8.5" cy="8.5" r="5.5"/><line x1="13" y1="13" x2="17" y2="17"/></svg> }
 function IconSun()            { return <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="10" r="3.5"/><line x1="10" y1="1.5" x2="10" y2="3.5"/><line x1="10" y1="16.5" x2="10" y2="18.5"/><line x1="1.5" y1="10" x2="3.5" y2="10"/><line x1="16.5" y1="10" x2="18.5" y2="10"/><line x1="4.1" y1="4.1" x2="5.5" y2="5.5"/><line x1="14.5" y1="14.5" x2="15.9" y2="15.9"/><line x1="4.1" y1="15.9" x2="5.5" y2="14.5"/><line x1="14.5" y1="5.5" x2="15.9" y2="4.1"/></svg> }
@@ -111,6 +112,12 @@ const NAV_SECTIONS = [
       { to: '/settings',      label: 'Settings',      Icon: IconSettings },
     ],
   },
+  {
+    label: 'Account',
+    items: [
+      { to: '/profile', label: 'Profile', Icon: IconProfile },
+    ],
+  },
 ]
 
 const PAGE_LABELS: Record<string, string> = {
@@ -135,6 +142,7 @@ const PAGE_LABELS: Record<string, string> = {
   '/notifications': 'Notifications',
   '/database':      'Database',
   '/alerts':        'Alert Rules',
+  '/profile':       'Profile',
 }
 
 // ── Global search items ────────────────────────────────────────
@@ -159,6 +167,7 @@ const SEARCH_ITEMS = [
   { label: 'Settings',       to: '/settings',      cat: 'Config'   },
   { label: 'Database',       to: '/database',      cat: 'Data'     },
   { label: 'Alert Rules',    to: '/alerts',        cat: 'Monitor'  },
+  { label: 'Profile',        to: '/profile',       cat: 'Account'  },
 ]
 
 // ── Theme helpers ──────────────────────────────────────────────
@@ -232,6 +241,7 @@ export default function Layout() {
   const handleLogout = async () => {
     setDropdownOpen(false)
     try { await logout() } catch { /* ignore */ }
+    clearCSRFToken()
     clearUser()
     navigate('/login')
   }

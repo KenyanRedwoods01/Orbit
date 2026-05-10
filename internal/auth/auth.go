@@ -18,17 +18,22 @@ type Claims struct {
 	UserID   int64  `json:"uid"`
 	Username string `json:"sub"`
 	Scope    string `json:"scope"` // "ui" | "read-only" | "deploy" | "admin"
+	IP       string `json:"ip,omitempty"`
 	jwt.RegisteredClaims
 }
 
 // IssueToken mints a signed JWT for the given user and scope.
-func IssueToken(secret []byte, userID int64, username, scope string, ttl time.Duration) (string, error) {
+func IssueToken(secret []byte, userID int64, username, scope, ip string, ttl time.Duration) (string, error) {
 	now := time.Now()
 	claims := Claims{
 		UserID:   userID,
 		Username: username,
 		Scope:    scope,
+		IP:       ip,
 		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "orbit",
+			Subject:   username,
+			Audience:  jwt.ClaimStrings{"orbit-ui"},
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
 		},

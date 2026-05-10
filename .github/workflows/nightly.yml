@@ -1,0 +1,227 @@
+name: Nightly Reliability
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  # 1. Full test suite ──────────────────────────────────────────────────────────
+  nightly-go:
+    name: Go Full Test Suite (race + vet)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run tests with race detector
+        run: |
+          go test -v -race -count=1 -timeout 180s \
+            -coverprofile=nightly-coverage.out \
+            ./internal/... \
+            2>&1 | tee nightly-test-results.txt
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          staticcheck ./...
+
+      - name: Upload results
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4
+        if: always()
+        with:
+          name: nightly-go-results
+          path: |
+            nightly-test-results.txt
+            nightly-coverage.out
+          retention-days: 30
+
+  # 2. govulncheck – Go known CVEs ──────────────────────────────────────────────
+  nightly-govulncheck:
+    name: govulncheck (Go CVEs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./... 2>&1 | tee govulncheck-nightly.txt
+
+      - name: Upload
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4
+        if: always()
+        with:
+          name: nightly-govulncheck
+          path: govulncheck-nightly.txt
+          retention-days: 30
+
+  # 3. npm audit + outdated ─────────────────────────────────────────────────────
+  nightly-npm:
+    name: npm audit + outdated
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci --legacy-peer-deps
+
+      - name: npm audit
+        run: npm audit --audit-level=moderate 2>&1 | tee npm-audit-nightly.txt || true
+
+      - name: npm outdated
+        run: npm outdated 2>&1 | tee npm-outdated-nightly.txt || true
+
+      - name: Run full test suite with coverage
+        run: npm run test:ci
+
+      - name: Upload
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4
+        if: always()
+        with:
+          name: nightly-npm-results
+          path: |
+            web/npm-audit-nightly.txt
+            web/npm-outdated-nightly.txt
+            web/coverage/
+          retention-days: 30
+
+  # 4. Trivy filesystem + container scan ────────────────────────────────────────
+  nightly-trivy:
+    name: Trivy Full Scan (CRITICAL + HIGH)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # v0.29.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-nightly.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@45775bd8235c68ba998cffa5171334d58593da47 # v3
+        if: always()
+        with:
+          sarif_file: trivy-nightly.sarif
+
+  # 5. Secret scanning ──────────────────────────────────────────────────────────
+  nightly-secrets:
+    name: Secret / Credential Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks scan
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+  # 6. Go dependency audit ───────────────────────────────────────────────────────
+  nightly-dep-audit:
+    name: Go Dependency Audit (nancy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: go mod audit
+        run: |
+          go list -json -m all 2>/dev/null | \
+            docker run --rm -i sonatypecommunity/nancy:latest sleuth 2>&1 | tee nancy-nightly.txt || true
+
+      - name: Upload
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4
+        if: always()
+        with:
+          name: nightly-dep-audit
+          path: nancy-nightly.txt
+          retention-days: 30
+
+  # 7. Refresh go.sum ───────────────────────────────────────────────────────────
+  go-sum-refresh:
+    name: Refresh go.sum (go mod tidy)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: go mod tidy
+        run: go mod tidy
+
+      - name: Commit updated go.sum
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet go.sum go.mod; then
+            git add go.sum go.mod
+            git commit -m "chore: regenerate go.sum after go mod tidy [skip ci]"
+            git push
+          else
+            echo "go.sum is already up to date — nothing to commit"
+          fi
+
+  # 8. Nightly summary ──────────────────────────────────────────────────────────
+  nightly-summary:
+    name: Nightly Summary
+    runs-on: ubuntu-latest
+    needs: [nightly-go, nightly-govulncheck, nightly-npm, nightly-trivy, nightly-secrets]
+    if: always()
+    steps:
+      - name: Report
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            const jobs = [
+              { name: 'Go Tests (race)',   result: '${{ needs.nightly-go.result }}' },
+              { name: 'govulncheck',       result: '${{ needs.nightly-govulncheck.result }}' },
+              { name: 'npm audit',         result: '${{ needs.nightly-npm.result }}' },
+              { name: 'Trivy Scan',        result: '${{ needs.nightly-trivy.result }}' },
+              { name: 'Secret Scan',       result: '${{ needs.nightly-secrets.result }}' },
+            ]
+            const icons = { success: '✅', failure: '❌', cancelled: '⚫', skipped: '⏭️' }
+            const rows = jobs.map(j => `| ${icons[j.result] || '❓'} ${j.name} | ${j.result} |`).join('\n')
+            const allPass = jobs.every(j => ['success', 'skipped'].includes(j.result))
+            console.log(`## Nightly Results\n\n| Status | Job |\n|--------|-----|\n${rows}\n\n**Overall:** ${allPass ? 'All checks passed' : 'Some checks failed'}`)

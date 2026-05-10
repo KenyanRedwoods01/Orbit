@@ -1,0 +1,64 @@
+name: Feature Request
+description: Suggest a new feature or improvement for Orbit
+title: "[Feature]: "
+labels: ["enhancement"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement! Please describe the feature clearly so we can evaluate it.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the problem or limitation that motivates this feature.
+      placeholder: "I always have to manually do X, which is error-prone because…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the feature you'd like to see added.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any alternative solutions or workarounds you've tried?
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Feature area
+      options:
+        - Authentication / Access Control
+        - SSH Terminal
+        - File Browser
+        - Docker / Containers
+        - Firewall / Ports
+        - Cron Jobs
+        - Backups
+        - Security / Wazuh / CrowdSec
+        - CI/CD Pipelines
+        - MCP / Agent Protocol
+        - Settings / Configuration
+        - API / Integrations
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true

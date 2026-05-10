@@ -25,9 +25,22 @@ services:
     image: orbit:${ORBIT_VERSION:-local}
     container_name: orbit
     restart: unless-stopped
+    # ── SECURITY WARNING ─────────────────────────────────────────────────────
+    # NET_ADMIN weakens container isolation: it allows modifying firewall/
+    # network rules. If you don't need firewall management, comment out
+    # NET_ADMIN and run with strictly `cap_drop: ALL`.
+    #
+    # SYS_PTRACE is NOT required — gopsutil reads /proc directly without ptrace.
+    #
+    # See: runc CVE-2025-52881, CVE-2025-31133 (procfs write redirect escapes)
+    # ─────────────────────────────────────────────────────────────────────────
     cap_add:
       - NET_ADMIN      # required for firewall rule management
-      - SYS_PTRACE     # required for per-process /proc stats
+    # SYS_PTRACE removed — gopsutil reads /proc directly
+    cap_drop:
+      - ALL            # drop all other capabilities
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "${ORBIT_PORT:-5000}:5000"
     volumes:
@@ -38,8 +51,7 @@ services:
     environment:
       - ORBIT_PORT=${ORBIT_PORT:-5000}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "--no-check-certificate",
-             "https://localhost:5000/api/health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:5000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -54,7 +66,7 @@ services:
   # Requires:     ORBIT_DOMAIN set in .env and certs at ./deploy/nginx/certs/
   #
   nginx:
-    image: nginx:1.27-alpine
+    image: nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
     container_name: orbit-nginx
     restart: unless-stopped
     profiles: ["nginx"]

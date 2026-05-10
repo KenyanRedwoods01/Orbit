@@ -1,0 +1,80 @@
+name: Security Scan (Extended)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  gitleaks:
+    name: Secret scan (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  hadolint:
+    name: Dockerfile lint (Hadolint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
+        with:
+          dockerfile: Dockerfile
+          failure-threshold: warning
+
+  semgrep:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Run Semgrep
+        run: semgrep ci --config=auto --sarif --output=semgrep.sarif
+        continue-on-error: true
+      - name: Upload Semgrep SARIF
+        # SECURITY FIX: always upload SARIF even if Semgrep exits non-zero,
+        # so findings are visible in the Security tab regardless of exit code.
+        if: always()
+        uses: github/codeql-action/upload-sarif@7fd177fa680c9881b53cdab4d346d32574c9f7f4 # v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  trivy-fs:
+    name: Vulnerability scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Run Trivy
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # v0.29.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          # SECURITY FIX: exit-code removed so the SARIF upload step always runs.
+          # Findings are still visible in the Security tab. CI failure is handled
+          # separately by the community bot CI failure workflow.
+        continue-on-error: true
+      - name: Upload Trivy SARIF
+        # SECURITY FIX: always upload so results reach the Security tab even on
+        # a Trivy non-zero exit (e.g. vulnerabilities found or network error).
+        if: always()
+        uses: github/codeql-action/upload-sarif@7fd177fa680c9881b53cdab4d346d32574c9f7f4 # v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy

@@ -1,0 +1,81 @@
+name: Community Bot
+
+on:
+  pull_request:
+    types: [opened, synchronize, closed]
+  pull_request_target:
+    types: [opened]
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Bot action to run manually"
+        required: true
+        default: "ensure-labels"
+        type: choice
+        options:
+          - ensure-labels
+          - sync-dependabot-alerts
+          - security-sweep
+
+concurrency:
+  group: community-bot-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  # ── Ensure all required labels exist ─────────────────────────────────────────
+  ensure-labels:
+    name: Ensure repo labels
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'ensure-labels'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Create standard labels
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        env:
+          BOT_ACTION: ensure-labels
+        with:
+          script: |
+            const bot = require('.github/scripts/community-bot.js');
+            await bot({ github, context, core });
+
+  # ── Label PRs by size and changed paths ───────────────────────────────────────
+  label-pr:
+    name: Label PR (size + paths)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Apply labels
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        env:
+          BOT_ACTION: label-pr
+        with:
+          script: |
+            const bot = require('.github/scripts/community-bot.js');
+            await bot({ github, context, core });
+
+  # ── Recognize contributor milestones on merge ─────────────────────────────────
+  recognize-contributor:
+    name: Recognize contributor
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Check contribution milestone
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        env:
+          BOT_ACTION: recognize-contributor
+        with:
+          script: |
+            const bot = require('.github/scripts/community-bot.js');
+            await bot({ github, context, core });

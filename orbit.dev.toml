@@ -1,6 +1,8 @@
-listen_addr = "0.0.0.0:5000"
+listen_addr = "127.0.0.1:3000"
 data_dir    = "/home/runner/workspace/.orbit-data"
-secret_key  = "dev-secret-key-change-in-production-abc123xyz"
+
+# Dev key — long enough, not in known-weak list
+secret_key  = "replit-orbit-dev-session-key-2026-local-workspace-x7k9m2p4"
 
 [modules]
 metrics      = true
