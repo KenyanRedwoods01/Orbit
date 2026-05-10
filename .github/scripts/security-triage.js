@@ -6,9 +6,9 @@ const octokit = new Octokit({
 
 const [owner, repo] = process.env.REPO.split("/");
 
-/**
- * Fetch all alerts (CodeQL + Semgrep)
- */
+// ----------------------------
+// FETCH ALERTS
+// ----------------------------
 async function fetchAlerts() {
   const res = await octokit.request(
     "GET /repos/{owner}/{repo}/code-scanning/alerts",
@@ -22,35 +22,27 @@ async function fetchAlerts() {
   return res.data;
 }
 
-/**
- * Create a stable grouping key
- */
-function getGroupKey(alert) {
-  return [
-    alert.rule.id,
-    alert.most_recent_instance.location.path,
-    alert.tool.name,
-  ].join("::");
+// ----------------------------
+// SEMANTIC GROUPING (LIGHT AI)
+// ----------------------------
+function semanticGroup(alert) {
+  const text = (
+    alert.rule.description +
+    " " +
+    alert.rule.id
+  ).toLowerCase();
+
+  if (text.includes("path")) return "path-traversal";
+  if (text.includes("exec") || text.includes("command")) return "command-injection";
+  if (text.includes("ssl") || text.includes("tls")) return "crypto-misconfig";
+  if (text.includes("sql")) return "sql-injection";
+
+  return "other";
 }
 
-/**
- * Group alerts
- */
-function groupAlerts(alerts) {
-  const groups = {};
-
-  for (const alert of alerts) {
-    const key = getGroupKey(alert);
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(alert);
-  }
-
-  return groups;
-}
-
-/**
- * Build labels intelligently
- */
+// ----------------------------
+// LABELS
+// ----------------------------
 function buildLabels(alert) {
   const labels = ["security"];
 
@@ -62,32 +54,59 @@ function buildLabels(alert) {
     labels.push(`tool:${alert.tool.name.toLowerCase()}`);
   }
 
-  if (alert.rule.id.includes("crypto")) {
-    labels.push("category:crypto");
-  }
-
-  if (alert.rule.id.includes("exec") || alert.rule.id.includes("command")) {
-    labels.push("category:command-injection");
-  }
-
-  if (alert.rule.id.includes("path")) {
-    labels.push("category:path-traversal");
-  }
+  const group = semanticGroup(alert);
+  labels.push(`category:${group}`);
 
   return labels;
 }
 
-/**
- * Fetch existing issues
- */
-async function fetchExistingIssues() {
+// ----------------------------
+// SLA RULES
+// ----------------------------
+function getSLA(alert) {
+  const severity = alert.rule.security_severity_level;
+
+  const hours =
+    severity === "critical" ? 24 :
+    severity === "high" ? 72 :
+    severity === "medium" ? 168 : 720;
+
+  const due = new Date(Date.now() + hours * 3600000);
+
+  return due.toISOString().split("T")[0];
+}
+
+// ----------------------------
+// GROUP ALERTS
+// ----------------------------
+function groupAlerts(alerts) {
+  const groups = {};
+
+  for (const alert of alerts) {
+    const key =
+      semanticGroup(alert) +
+      "::" +
+      alert.most_recent_instance.location.path +
+      "::" +
+      alert.tool.name;
+
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(alert);
+  }
+
+  return groups;
+}
+
+// ----------------------------
+// GET ISSUES
+// ----------------------------
+async function getIssues() {
   const res = await octokit.request(
     "GET /repos/{owner}/{repo}/issues",
     {
       owner,
       repo,
       state: "open",
-      labels: "security",
       per_page: 100,
     }
   );
@@ -95,66 +114,69 @@ async function fetchExistingIssues() {
   return res.data;
 }
 
-/**
- * Check if issue already exists
- */
-function findExistingIssue(issues, groupKey) {
-  return issues.find((issue) =>
-    issue.body?.includes(groupKey)
-  );
-}
-
-/**
- * Create issue
- */
+// ----------------------------
+// CREATE ISSUE
+// ----------------------------
 async function createIssue(title, body, labels) {
-  return octokit.request("POST /repos/{owner}/{repo}/issues", {
-    owner,
-    repo,
-    title,
-    body,
-    labels,
-  });
-}
-
-/**
- * Update issue (append new alerts)
- */
-async function updateIssue(issueNumber, body) {
   return octokit.request(
-    "PATCH /repos/{owner}/{repo}/issues/{issue_number}",
+    "POST /repos/{owner}/{repo}/issues",
     {
       owner,
       repo,
-      issue_number: issueNumber,
+      title,
       body,
+      labels,
     }
   );
 }
 
-/**
- * MAIN LOGIC
- */
+// ----------------------------
+// AUTO FIX ENGINE (SAFE ONLY)
+// ----------------------------
+function generateFix(alert) {
+  const rule = alert.rule.id;
+
+  if (rule.includes("missing-ssl-minversion")) {
+    return `
+tlsConfig := &tls.Config{
+  MinVersion: tls.VersionTLS12,
+}
+`;
+  }
+
+  if (rule.includes("dangerous-exec")) {
+    return `
+// FIX: Replace exec with whitelist-based execution
+// DO NOT use raw user input
+`;
+  }
+
+  if (rule.includes("path")) {
+    return `
+cleanPath := filepath.Clean(userInput)
+`;
+  }
+
+  return null;
+}
+
+// ----------------------------
+// MAIN
+// ----------------------------
 async function run() {
   const alerts = await fetchAlerts();
   const groups = groupAlerts(alerts);
-  const existingIssues = await fetchExistingIssues();
+  const issues = await getIssues();
 
   for (const key of Object.keys(groups)) {
     const group = groups[key];
     const first = group[0];
 
-    const title = `🚨 ${first.rule.description}`;
-
-    const alertList = group
-      .map(
-        (a) =>
-          `- #${a.number} | ${a.state} | ${a.html_url}`
-      )
-      .join("\n");
+    const labels = buildLabels(first);
+    const sla = getSLA(first);
 
     const body = `
-## Security Group Key
+## 🚨 Security Group
 ${key}
 
 ## Rule
@@ -166,29 +188,37 @@ ${first.most_recent_instance.location.path}
 ## Tool
 ${first.tool.name}
 
+## SLA Due
+${sla}
+
 ---
 
 ## Alerts
-${alertList}
+${group
+  .map((a) => `- #${a.number} | ${a.state} | ${a.html_url}`)
+  .join("\n")}
+
+---
+
+## Suggested Fix
+\`\`\`go
+${generateFix(first) || "No safe auto-fix available"}
+\`\`\`
 `;
 
-    const labels = buildLabels(first);
+    // dedupe (simple match)
+    const exists = issues.find(i => i.body?.includes(key));
 
-    const existing = findExistingIssue(existingIssues, key);
-
-    if (existing) {
-      console.log(`Updating issue #${existing.number}`);
-      await updateIssue(
-        existing.number,
-        existing.body + "\n\n---\n\n" + body
+    if (!exists) {
+      await createIssue(
+        `🚨 ${first.rule.description}`,
+        body,
+        labels
       );
-    } else {
-      console.log(`Creating issue: ${title}`);
-      await createIssue(title, body, labels);
     }
   }
 
-  console.log("Done security triage.");
+  console.log("Security triage complete.");
 }
 
 run().catch(console.error);
