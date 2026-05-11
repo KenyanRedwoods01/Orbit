@@ -1,9 +1,10 @@
 module github.com/KenyanRedwoods01/Orbit
 
-go 1.22
+go 1.23.0
 
 require (
 	github.com/BurntSushi/toml v1.3.2
+	github.com/creack/pty v1.1.24
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/gorilla/websocket v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.22
@@ -13,7 +14,6 @@ require (
 )
 
 require (
-	github.com/creack/pty v1.1.24 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
