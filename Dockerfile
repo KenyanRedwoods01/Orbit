@@ -22,17 +22,19 @@
 
 # ── Stage 1: Build React frontend ──────────────────────────────────────────
 FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS web-build
-WORKDIR /app
+# Use WORKDIR directly instead of cd (hadolint DL3003)
+WORKDIR /app/web
 
-COPY web/package*.json ./web/
-RUN cd web && npm ci --prefer-offline
+COPY web/package*.json ./
+RUN npm ci --prefer-offline
 
-COPY web/ ./web/
-RUN cd web && npm run build
+COPY web/ ./
+RUN npm run build
 
 # ── Stage 2: Build Go binary ────────────────────────────────────────────────
 FROM golang:1.22-alpine@sha256:1699c10032ca2582ec89a24a1312d986a3f094aed3d5c1147b19880afe40e052 AS go-build
 
+# hadolint ignore=DL3018
 RUN apk add --no-cache gcc musl-dev git
 
 WORKDIR /app
@@ -61,6 +63,7 @@ LABEL org.opencontainers.image.licenses="AGPL-3.0"
 LABEL maintainer="KenyanRedwoods01"
 
 # Runtime dependencies
+# hadolint ignore=DL3018
 RUN apk add --no-cache ca-certificates tzdata curl && \
     addgroup -S orbit && \
     adduser  -S -G orbit orbit

@@ -182,24 +182,24 @@ func (s *Server) handleFTPUserCreate(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "username and password are required", http.StatusBadRequest)
                 return
         }
-	if req.HomeDir == "" {
-		req.HomeDir = "/home/ftp/" + req.Username
-	}
-	req.HomeDir = filepath.Clean(req.HomeDir)
-	if !filepath.IsAbs(req.HomeDir) {
-		http.Error(w, "invalid home directory", http.StatusBadRequest)
-		return
-	}
-	if strings.Contains(req.HomeDir, "..") {
-		http.Error(w, "home directory contains path traversal", http.StatusBadRequest)
-		return
-	}
-	// Use safeRoot to ensure home_dir stays within allowed paths
-	if _, err := safeRoot(req.HomeDir); err != nil {
-		http.Error(w, "home directory is not in an allowed path", http.StatusBadRequest)
-		return
-	}
-	os.MkdirAll(req.HomeDir, 0o755) //nolint:errcheck
+        if req.HomeDir == "" {
+                req.HomeDir = "/home/ftp/" + req.Username
+        }
+        req.HomeDir = filepath.Clean(req.HomeDir)
+        if !filepath.IsAbs(req.HomeDir) {
+                http.Error(w, "invalid home directory", http.StatusBadRequest)
+                return
+        }
+        if strings.Contains(req.HomeDir, "..") {
+                http.Error(w, "home directory contains path traversal", http.StatusBadRequest)
+                return
+        }
+        // Use safeRoot to ensure home_dir stays within allowed paths
+        if _, err := s.safeRoot(req.HomeDir); err != nil {
+                http.Error(w, "home directory is not in an allowed path", http.StatusBadRequest)
+                return
+        }
+        os.MkdirAll(req.HomeDir, 0o755) //nolint:errcheck
 
 
         hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
@@ -253,31 +253,31 @@ func (s *Server) handleFTPUserUpdate(w http.ResponseWriter, r *http.Request) {
                 http.Error(w, "bad request", http.StatusBadRequest)
                 return
         }
-	// Validate home_dir
-	if req.HomeDir != "" {
-		req.HomeDir = filepath.Clean(req.HomeDir)
-		if !filepath.IsAbs(req.HomeDir) {
-			http.Error(w, "invalid home directory", http.StatusBadRequest)
-			return
-		}
-		if strings.Contains(req.HomeDir, "..") {
-			http.Error(w, "home directory contains path traversal", http.StatusBadRequest)
-			return
-		}
-		if _, err := safeRoot(req.HomeDir); err != nil {
-			http.Error(w, "home directory is not in an allowed path", http.StatusBadRequest)
-			return
-		}
-	}
+        // Validate home_dir
+        if req.HomeDir != "" {
+                req.HomeDir = filepath.Clean(req.HomeDir)
+                if !filepath.IsAbs(req.HomeDir) {
+                        http.Error(w, "invalid home directory", http.StatusBadRequest)
+                        return
+                }
+                if strings.Contains(req.HomeDir, "..") {
+                        http.Error(w, "home directory contains path traversal", http.StatusBadRequest)
+                        return
+                }
+                if _, err := s.safeRoot(req.HomeDir); err != nil {
+                        http.Error(w, "home directory is not in an allowed path", http.StatusBadRequest)
+                        return
+                }
+        }
 
-	chroot, enabled := 0, 0
-	if req.Chroot {
-		chroot = 1
-	}
-	if req.Enabled {
-		enabled = 1
-	}
-	if req.Password != "" {
+        chroot, enabled := 0, 0
+        if req.Chroot {
+                chroot = 1
+        }
+        if req.Enabled {
+                enabled = 1
+        }
+        if req.Password != "" {
                 hash, err2 := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
                 if err2 != nil {
                         http.Error(w, "hash error", http.StatusInternalServerError)

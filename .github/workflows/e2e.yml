@@ -25,6 +25,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Tidy dependencies
+        run: go mod tidy
+
       - name: Build binary
         run: GOFLAGS="-buildvcs=false" go build -o orbit ./cmd/orbit/
 
@@ -59,7 +62,7 @@ jobs:
           cache: true
 
       - name: Download binary
-        uses: actions/download-artifact@fa0a91b85d4f404e444306234a0d1f1707950b57 # v4
+        uses: actions/download-artifact@v4
         with:
           name: orbit-e2e-binary
 
@@ -135,7 +138,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Download binary
-        uses: actions/download-artifact@fa0a91b85d4f404e444306234a0d1f1707950b57 # v4
+        uses: actions/download-artifact@v4
         with:
           name: orbit-e2e-binary
 

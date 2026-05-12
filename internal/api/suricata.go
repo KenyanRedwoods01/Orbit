@@ -165,19 +165,19 @@ type suricataHostbit struct {
 }
 
 var suricataAllowedCommands = map[string]bool{
-	"reload":          true,
-	"reload-rules":    true,
-	"shutdown-check":  true,
-	"iface-list":      true,
-	"iface-stat":      true,
-	"iface-bypass-stat": true,
-	"list-hostbits":    true,
-	"add-hostbit":      true,
-	"remove-hostbit":   true,
-	"uptime":          true,
-	"stats":           true,
-	"dump-counters":   true,
-	"registered-flows": true,
+        "reload":          true,
+        "reload-rules":    true,
+        "shutdown-check":  true,
+        "iface-list":      true,
+        "iface-stat":      true,
+        "iface-bypass-stat": true,
+        "list-hostbits":    true,
+        "add-hostbit":      true,
+        "remove-hostbit":   true,
+        "uptime":          true,
+        "stats":           true,
+        "dump-counters":   true,
+        "registered-flows": true,
 }
 
 type suricataLogEntry struct {
@@ -767,21 +767,21 @@ func (s *Server) handleSuricataRuleCreate(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleSuricataRuleToggle(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		SID    string `json:"sid"`
-		Enable bool   `json:"enable"`
-	}
-	json.NewDecoder(r.Body).Decode(&req)
-	if _, err := strconv.Atoi(req.SID); err != nil || req.SID == "" {
-		writeJSON(w, map[string]interface{}{"ok": false, "error": "invalid sid"})
-		return
-	}
-	// suricata-update disable/enable rule
-	action := "disable-conf"
-	if req.Enable {
-		action = "enable-conf"
-	}
-	out, err := exec.Command("suricata-update", action, req.SID).CombinedOutput()
+        var req struct {
+                SID    string `json:"sid"`
+                Enable bool   `json:"enable"`
+        }
+        json.NewDecoder(r.Body).Decode(&req)
+        if _, err := strconv.Atoi(req.SID); err != nil || req.SID == "" {
+                writeJSON(w, map[string]interface{}{"ok": false, "error": "invalid sid"})
+                return
+        }
+        // suricata-update disable/enable rule
+        action := "disable-conf"
+        if req.Enable {
+                action = "enable-conf"
+        }
+        out, err := exec.Command("suricata-update", action, req.SID).CombinedOutput()
         ok := err == nil
         writeJSON(w, map[string]interface{}{"ok": ok, "output": string(out)})
 }
@@ -846,16 +846,22 @@ func (s *Server) handleSuricataConfigSave(w http.ResponseWriter, r *http.Request
         if req.Path == "" {
                 req.Path = "/etc/suricata/suricata.yaml"
         }
-        // Validate path stays within the expected Suricata config directory
-        req.Path = filepath.Clean(req.Path)
-        if !strings.HasPrefix(req.Path, "/etc/suricata/") && !strings.HasPrefix(req.Path, "/var/log/suricata/") {
-                writeJSON(w, map[string]interface{}{"ok": false, "error": "invalid config path"})
-                return
+        // Restrict the config path to a specific safe directory by extracting just
+        // the filename and joining it with a known-safe prefix. This prevents path
+        // traversal even if the caller supplies something like "../../../etc/passwd".
+        safeFilename := filepath.Base(req.Path)
+        var safePath string
+        cleanedPath := filepath.Clean(req.Path)
+        switch {
+        case strings.HasPrefix(cleanedPath, "/var/log/suricata/"):
+                safePath = filepath.Join("/var/log/suricata", safeFilename)
+        default:
+                safePath = filepath.Join("/etc/suricata", safeFilename)
         }
         // backup
-        existing, _ := os.ReadFile(req.Path)
+        existing, _ := os.ReadFile(safePath)
         if existing != nil {
-                os.WriteFile(req.Path+".orbit-backup", existing, 0640) //nolint:errcheck
+                os.WriteFile(safePath+".orbit-backup", existing, 0640) //nolint:errcheck
         }
         // test first
         tmpFile := "/tmp/suricata-test.yaml"
@@ -865,7 +871,7 @@ func (s *Server) handleSuricataConfigSave(w http.ResponseWriter, r *http.Request
                 writeJSON(w, map[string]interface{}{"ok": false, "error": "Config test failed", "output": string(testOut)})
                 return
         }
-        err := os.WriteFile(req.Path, []byte(req.Raw), 0640)
+        err := os.WriteFile(safePath, []byte(req.Raw), 0640)
         if err != nil {
                 writeJSON(w, map[string]interface{}{"ok": false, "error": "operation failed"})
                 return
@@ -955,16 +961,16 @@ func (s *Server) handleSuricataHostbitRemove(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *Server) handleSuricataDropIP(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		IP      string `json:"ip"`
-		Comment string `json:"comment"`
-	}
-	json.NewDecoder(r.Body).Decode(&req)
-	if !regexp.MustCompile(`^[0-9a-fA-F.:/]+$`).MatchString(req.IP) {
-		writeJSON(w, map[string]interface{}{"ok": false, "error": "invalid ip"})
-		return
-	}
-	// Add hostbit as a block
+        var req struct {
+                IP      string `json:"ip"`
+                Comment string `json:"comment"`
+        }
+        json.NewDecoder(r.Body).Decode(&req)
+        if !regexp.MustCompile(`^[0-9a-fA-F.:/]+$`).MatchString(req.IP) {
+                writeJSON(w, map[string]interface{}{"ok": false, "error": "invalid ip"})
+                return
+        }
+        // Add hostbit as a block
         suricataSendSocket("add-hostbit", map[string]interface{}{ //nolint:errcheck
                 "ip": req.IP, "name": "orbit-block", "expire": 86400,
         })
@@ -1054,16 +1060,16 @@ echo "IPS mode active. Traffic is now routed through Suricata."`
 }
 
 func (s *Server) handleSuricataSocket(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Command   string      `json:"command"`
-		Arguments interface{} `json:"arguments"`
-	}
-	json.NewDecoder(r.Body).Decode(&req)
-	if !suricataAllowedCommands[req.Command] {
-		writeJSON(w, map[string]interface{}{"ok": false, "error": "command not allowed"})
-		return
-	}
-	result, err := suricataSendSocket(req.Command, req.Arguments)
+        var req struct {
+                Command   string      `json:"command"`
+                Arguments interface{} `json:"arguments"`
+        }
+        json.NewDecoder(r.Body).Decode(&req)
+        if !suricataAllowedCommands[req.Command] {
+                writeJSON(w, map[string]interface{}{"ok": false, "error": "command not allowed"})
+                return
+        }
+        result, err := suricataSendSocket(req.Command, req.Arguments)
         if err != nil {
                 writeJSON(w, map[string]interface{}{"ok": false, "error": "operation failed"})
                 return

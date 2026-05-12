@@ -52,6 +52,9 @@ jobs:
           go-version: ${{ inputs.go_version || matrix.go }}
           cache: true
 
+      - name: Tidy dependencies
+        run: go mod tidy
+
       - name: Run tests
         run: |
           FLAGS="-v -count=1 -timeout 120s -coverprofile=cov-${{ matrix.go }}.out"
@@ -77,6 +80,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Tidy dependencies
+        run: go mod tidy
 
       - name: Fuzz validateDBIdentifier
         run: |
@@ -130,6 +136,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Tidy dependencies
+        run: go mod tidy
+
       - name: govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
@@ -178,6 +187,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Tidy dependencies
+        run: go mod tidy
 
       - name: Build binary
         run: |
@@ -287,7 +299,7 @@ jobs:
           cache: true
 
       - name: Download Go coverage artifacts
-        uses: actions/download-artifact@fa0a91b85d4f404e444306234a0d1f1707950b57 # v4
+        uses: actions/download-artifact@v4
         with:
           pattern: go-coverage-*
           path: coverage/
